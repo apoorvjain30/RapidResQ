@@ -54,7 +54,7 @@ private val DarkColors = darkColorScheme(
  */
 @Composable
 fun RapidResQTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColors else LightColors

@@ -21,6 +21,10 @@ class RapidResQViewModel(
     private val _activeResponderTeamId = MutableStateFlow("TEAM-BRAVO")
     val activeResponderTeamId: StateFlow<String> = _activeResponderTeamId.asStateFlow()
 
+    fun setActiveResponderTeam(teamId: String) {
+        _activeResponderTeamId.value = teamId
+    }
+
     private val _statusBanner = MutableStateFlow<String?>(null)
     val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
