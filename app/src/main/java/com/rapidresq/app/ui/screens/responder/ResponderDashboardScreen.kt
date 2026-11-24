@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
@@ -38,11 +39,20 @@ import com.rapidresq.app.viewmodel.RapidResQViewModel
 fun ResponderDashboardScreen(
     viewModel: RapidResQViewModel,
     onBackToRoles: () -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val activeTeamId by viewModel.activeResponderTeamId.collectAsState()
+    val session by viewModel.currentSession.collectAsState()
+    val isLockedToTeam = session?.assignedTeamId != null
+
+    LaunchedEffect(session) {
+        session?.assignedTeamId?.let { teamId ->
+            viewModel.setActiveResponderTeam(teamId)
+        }
+    }
 
     val activeTeam = teams.find { it.id == activeTeamId }
     
@@ -59,27 +69,38 @@ fun ResponderDashboardScreen(
     Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
         DemoModeBanner()
         TopAppBar(
-            title = { Text("Responder Field Unit", fontWeight = FontWeight.Bold, color = BrandNavy) },
+            title = { Text("Responder Unit - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
                 IconButton(onClick = onBackToRoles) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
                 }
             },
+            actions = {
+                IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
         )
 
-        // Team Switcher Strip
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().background(LightSurface)
-        ) {
-            items(teams) { team ->
-                TeamSelectorChip(
-                    team = team,
-                    isSelected = team.id == activeTeamId,
-                    onClick = { viewModel.setActiveResponderTeam(team.id) }
-                )
+        if (!isLockedToTeam) {
+            // Team Switcher Strip
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().background(LightSurface)
+            ) {
+                items(teams) { team ->
+                    TeamSelectorChip(
+                        team = team,
+                        isSelected = team.id == activeTeamId,
+                        onClick = { viewModel.setActiveResponderTeam(team.id) }
+                    )
+                }
+            }
+        } else {
+            Surface(modifier = Modifier.fillMaxWidth().background(LightSurface).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Text("Assigned to: ${activeTeam?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandBlue)
             }
         }
 

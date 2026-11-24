@@ -39,6 +39,7 @@ fun RapidResQNavGraph() {
     val snackbarHostState = remember { SnackbarHostState() }
     
     val statusBanner by viewModel.statusBanner.collectAsState()
+    val currentSession by viewModel.currentSession.collectAsState()
 
     LaunchedEffect(statusBanner) {
         statusBanner?.let {
@@ -58,8 +59,17 @@ fun RapidResQNavGraph() {
             composable("splash") {
                 SplashScreen(
                     onFinished = {
-                        navController.navigate("onboarding") {
-                            popUpTo("splash") { inclusive = true }
+                        if (currentSession != null && currentSession?.isGuest == false) {
+                            val dest = when (currentSession?.role) {
+                                UserRole.CITIZEN -> "citizen_home"
+                                UserRole.DISPATCHER -> "dispatcher_dashboard"
+                                UserRole.RESPONDER -> "responder_dashboard"
+                                UserRole.ADMIN -> "admin_dashboard"
+                                else -> "login"
+                            }
+                            navController.navigate(dest) { popUpTo("splash") { inclusive = true } }
+                        } else {
+                            navController.navigate("onboarding") { popUpTo("splash") { inclusive = true } }
                         }
                     }
                 )
@@ -71,17 +81,24 @@ fun RapidResQNavGraph() {
                             popUpTo("onboarding") { inclusive = true }
                         }
                     },
-                    onGuestSosClick = { navController.navigate("citizen_home") }
+                    onGuestSosClick = {
+                        viewModel.enterGuestSos()
+                        navController.navigate("citizen_home")
+                    }
                 )
             }
             composable("login") {
                 LoginScreen(
-                    onGuestSosClick = { navController.navigate("citizen_home") },
+                    viewModel = viewModel,
+                    onGuestSosClick = {
+                        viewModel.enterGuestSos()
+                        navController.navigate("citizen_home")
+                    },
                     onRequireOtp = { role, email -> 
                         val encodedEmail = email.replace(".", "%2E") // simple encoding for demo
                         navController.navigate("otp_verify/${role.name}/$encodedEmail")
                     },
-                    onCitizenSignedIn = { navController.navigate("citizen_home") },
+                    onCitizenSignedIn = { navController.navigate("citizen_home") { popUpTo("login") { inclusive = true } } },
                     onRegisterClick = { navController.navigate("register_citizen") },
                     onForgotPasswordClick = { navController.navigate("forgot_password") },
                     onOpenRoleSwitcher = { navController.navigate("role_entry") }
@@ -89,12 +106,16 @@ fun RapidResQNavGraph() {
             }
             composable("register_citizen") {
                 RegisterCitizenScreen(
+                    viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                     onProceedToOtp = { email -> 
                         val encodedEmail = email.replace(".", "%2E")
                         navController.navigate("otp_verify/${UserRole.CITIZEN.name}/$encodedEmail")
                     },
-                    onGuestSosClick = { navController.navigate("citizen_home") }
+                    onGuestSosClick = { 
+                        viewModel.enterGuestSos()
+                        navController.navigate("citizen_home")
+                    }
                 )
             }
             composable(
@@ -108,6 +129,7 @@ fun RapidResQNavGraph() {
                 val email = backStackEntry.arguments?.getString("email")?.replace("%2E", ".") ?: ""
                 
                 OtpVerificationScreen(
+                    viewModel = viewModel,
                     roleName = roleName,
                     email = email,
                     onVerified = {
@@ -127,6 +149,7 @@ fun RapidResQNavGraph() {
             }
             composable("forgot_password") {
                 ForgotPasswordScreen(
+                    viewModel = viewModel,
                     onBack = { navController.popBackStack() },
                     onBackToLogin = { 
                         navController.navigate("login") {
@@ -152,7 +175,8 @@ fun RapidResQNavGraph() {
                     viewModel = viewModel,
                     onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
                     onReportClick = { navController.navigate("citizen_report") },
-                    onTrackIncident = { incidentId -> navController.navigate("citizen_track/$incidentId") }
+                    onTrackIncident = { incidentId -> navController.navigate("citizen_track/$incidentId") },
+                    onLogout = { navController.navigate("login") { popUpTo(0) } }
                 )
             }
             composable("citizen_report") {
@@ -178,22 +202,46 @@ fun RapidResQNavGraph() {
                 )
             }
             composable("dispatcher_dashboard") {
-                DispatcherDashboardScreen(
-                    viewModel = viewModel,
-                    onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) }
-                )
+                LaunchedEffect(currentSession) {
+                    if (currentSession?.role != UserRole.DISPATCHER) {
+                        navController.navigate("login") { popUpTo(0) }
+                    }
+                }
+                if (currentSession?.role == UserRole.DISPATCHER) {
+                    DispatcherDashboardScreen(
+                        viewModel = viewModel,
+                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                    )
+                }
             }
             composable("responder_dashboard") {
-                ResponderDashboardScreen(
-                    viewModel = viewModel,
-                    onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) }
-                )
+                LaunchedEffect(currentSession) {
+                    if (currentSession?.role != UserRole.RESPONDER) {
+                        navController.navigate("login") { popUpTo(0) }
+                    }
+                }
+                if (currentSession?.role == UserRole.RESPONDER) {
+                    ResponderDashboardScreen(
+                        viewModel = viewModel,
+                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                    )
+                }
             }
             composable("admin_dashboard") {
-                AdminDashboardScreen(
-                    viewModel = viewModel,
-                    onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) }
-                )
+                LaunchedEffect(currentSession) {
+                    if (currentSession?.role != UserRole.ADMIN) {
+                        navController.navigate("login") { popUpTo(0) }
+                    }
+                }
+                if (currentSession?.role == UserRole.ADMIN) {
+                    AdminDashboardScreen(
+                        viewModel = viewModel,
+                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                    )
+                }
             }
         }
     }

@@ -34,6 +34,7 @@ interface IncidentRepository {
     fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam>
     fun toggleTeamAvailability(teamId: String): Result<Unit>
     fun toggleStaffActive(staffId: String): Result<Unit>
+    fun logSecurityEvent(actorRole: String, action: String, incidentId: String = "SYSTEM", details: String)
 }
 
 class DemoIncidentRepository : IncidentRepository {
@@ -61,6 +62,10 @@ class DemoIncidentRepository : IncidentRepository {
     private fun generateTrackingId(): String {
         val chars = (1..6).map { allowedChars[secureRandom.nextInt(allowedChars.length)] }.joinToString("")
         return "RRQ-$chars"
+    }
+
+    override fun logSecurityEvent(actorRole: String, action: String, incidentId: String, details: String) {
+        logAudit(actorRole, action, incidentId, details)
     }
 
     private fun logAudit(actorRole: String, action: String, incidentId: String, details: String) {

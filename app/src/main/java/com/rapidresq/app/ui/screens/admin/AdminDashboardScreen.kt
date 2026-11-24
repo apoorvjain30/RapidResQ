@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,12 +27,14 @@ import com.rapidresq.app.viewmodel.RapidResQViewModel
 fun AdminDashboardScreen(
     viewModel: RapidResQViewModel,
     onBackToRoles: () -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val staffAccounts by viewModel.staffAccounts.collectAsState()
     val auditLogs by viewModel.auditLogs.collectAsState()
+    val session by viewModel.currentSession.collectAsState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showAddUnitDialog by remember { mutableStateOf(false) }
@@ -39,10 +42,15 @@ fun AdminDashboardScreen(
     Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
         DemoModeBanner()
         TopAppBar(
-            title = { Text("Admin Governance", fontWeight = FontWeight.Bold, color = BrandNavy) },
+            title = { Text("Admin Governance - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
                 IconButton(onClick = onBackToRoles) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                }
+            },
+            actions = {
+                IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)

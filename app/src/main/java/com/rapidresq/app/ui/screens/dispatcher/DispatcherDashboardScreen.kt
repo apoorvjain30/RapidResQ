@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,11 +35,13 @@ import java.util.*
 fun DispatcherDashboardScreen(
     viewModel: RapidResQViewModel,
     onBackToRoles: () -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val teams by viewModel.teams.collectAsState()
     val auditLogs by viewModel.auditLogs.collectAsState()
+    val session by viewModel.currentSession.collectAsState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var selectedFilter by remember { mutableStateOf("All") }
@@ -46,10 +49,15 @@ fun DispatcherDashboardScreen(
     Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
         DemoModeBanner()
         TopAppBar(
-            title = { Text("Dispatcher Command", fontWeight = FontWeight.Bold, color = BrandNavy) },
+            title = { Text("Dispatcher Command - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
                 IconButton(onClick = onBackToRoles) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                }
+            },
+            actions = {
+                IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)

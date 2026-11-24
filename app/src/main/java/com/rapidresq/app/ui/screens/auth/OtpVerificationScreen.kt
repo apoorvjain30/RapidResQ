@@ -19,11 +19,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rapidresq.app.ui.theme.*
+import com.rapidresq.app.viewmodel.RapidResQViewModel
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OtpVerificationScreen(
+    viewModel: RapidResQViewModel,
     roleName: String,
     email: String,
     onVerified: () -> Unit,
@@ -33,6 +35,9 @@ fun OtpVerificationScreen(
     var otpValue by remember { mutableStateOf("") }
     var countdown by remember { mutableStateOf(60) }
     val otpLength = 6
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    
+    val simulatedNotice by viewModel.simulatedOtpNotice.collectAsState()
 
     LaunchedEffect(countdown) {
         if (countdown > 0) {
@@ -81,24 +86,29 @@ fun OtpVerificationScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Surface(
-                color = WarningAmberBg,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Phase 2 UI Preview: Enter any 6 digits (e.g., 123456). Real OTP delivery, expiry & lockout launch in Phase 3.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WarningAmber,
-                    modifier = Modifier.padding(12.dp)
-                )
+            if (simulatedNotice != null) {
+                Surface(
+                    color = InfoCyanBg,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = simulatedNotice!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = InfoCyan,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
 
             BasicTextField(
                 value = otpValue,
-                onValueChange = { if (it.length <= otpLength) otpValue = it.filter { char -> char.isDigit() } },
+                onValueChange = { 
+                    if (it.length <= otpLength) otpValue = it.filter { char -> char.isDigit() }
+                    errorMsg = null 
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 decorationBox = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -108,12 +118,13 @@ fun OtpVerificationScreen(
                                 else -> otpValue[index].toString()
                             }
                             val isFocused = index == otpValue.length || (index == otpLength - 1 && otpValue.length == otpLength)
+                            val borderColor = if (errorMsg != null) EmergencyRed else if (isFocused) BrandBlue else SubtleBorder
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f)
                                     .background(LightSurface, RoundedCornerShape(8.dp))
-                                    .border(2.dp, if (isFocused) BrandBlue else SubtleBorder, RoundedCornerShape(8.dp)),
+                                    .border(2.dp, borderColor, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(char, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = SlateTextPrimary)
@@ -123,10 +134,21 @@ fun OtpVerificationScreen(
                 }
             )
 
+            if (errorMsg != null) {
+                Text(errorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = onVerified,
+                onClick = {
+                    val res = viewModel.verifyActiveOtp(otpValue)
+                    if (res.isSuccess) {
+                        onVerified()
+                    } else {
+                        errorMsg = res.exceptionOrNull()?.message
+                    }
+                },
                 enabled = otpValue.length == otpLength,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
@@ -137,7 +159,12 @@ fun OtpVerificationScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             TextButton(
-                onClick = { countdown = 60 },
+                onClick = { 
+                    countdown = 60
+                    otpValue = ""
+                    errorMsg = null
+                    viewModel.resendActiveOtp()
+                },
                 enabled = countdown == 0
             ) {
                 if (countdown > 0) {

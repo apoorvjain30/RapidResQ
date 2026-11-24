@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,10 +32,14 @@ fun CitizenHomeScreen(
     onBackToRoles: () -> Unit,
     onReportClick: () -> Unit,
     onTrackIncident: (String) -> Unit,
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val incidents by viewModel.incidents.collectAsState()
+    val session by viewModel.currentSession.collectAsState()
     var trackId by remember { mutableStateOf("") }
+    
+    val titleText = if (session?.isGuest == true) "Guest SOS Mode" else "Citizen Portal - ${session?.name ?: ""}"
 
     Column(
         modifier = modifier
@@ -43,10 +48,15 @@ fun CitizenHomeScreen(
     ) {
         // Top Bar
         TopAppBar(
-            title = { Text("Citizen Emergency Portal", fontWeight = FontWeight.Bold, color = BrandNavy) },
+            title = { Text(titleText, fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
                 IconButton(onClick = onBackToRoles) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                }
+            },
+            actions = {
+                IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)

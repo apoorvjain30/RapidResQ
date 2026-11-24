@@ -1,7 +1,6 @@
 package com.rapidresq.app.ui.screens.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,14 +20,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rapidresq.app.data.model.UserRole
 import com.rapidresq.app.ui.components.DemoModeBanner
 import com.rapidresq.app.ui.theme.*
+import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @Composable
 fun LoginScreen(
+    viewModel: RapidResQViewModel,
     onGuestSosClick: () -> Unit,
     onRequireOtp: (UserRole, String) -> Unit,
     onCitizenSignedIn: () -> Unit,
@@ -37,23 +37,30 @@ fun LoginScreen(
     onOpenRoleSwitcher: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedRole by remember { mutableStateOf(UserRole.DISPATCHER) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
     var emailError by remember { mutableStateOf(false) }
     var passwordError by remember { mutableStateOf(false) }
+    var loginErrorMsg by remember { mutableStateOf<String?>(null) }
 
     fun validateAndProceed() {
         emailError = email.isBlank() || !email.contains("@")
         passwordError = password.length < 6
+        loginErrorMsg = null
 
         if (!emailError && !passwordError) {
-            if (selectedRole == UserRole.CITIZEN) {
-                onCitizenSignedIn()
+            val result = viewModel.loginWithPassword(email, password)
+            if (result.isSuccess) {
+                val (session, role) = result.getOrNull()!!
+                if (session != null) {
+                    onCitizenSignedIn()
+                } else {
+                    onRequireOtp(role, email)
+                }
             } else {
-                onRequireOtp(selectedRole, email)
+                loginErrorMsg = result.exceptionOrNull()?.message
             }
         }
     }
@@ -98,20 +105,33 @@ fun LoginScreen(
                     ) {
                         Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Guest Emergency SOS", color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("Guest Emergency SOS (No Login)", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Text(
-                text = "Sign In",
-                style = MaterialTheme.typography.headlineMedium,
-                color = BrandNavy,
-                fontWeight = FontWeight.ExtraBold
-            )
-            
+            // Demo Accounts Helpers
+            Surface(
+                color = InfoCyanBg,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Demo Test Accounts", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = InfoCyan)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        AssistChip(onClick = { email = "admin@rapidresq.in"; password = "Admin@123" }, label = { Text("Admin") })
+                        AssistChip(onClick = { email = "dispatch@rapidresq.in"; password = "Dispatch@123" }, label = { Text("Dispatch") })
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        AssistChip(onClick = { email = "bravo@rapidresq.in"; password = "Unit@123" }, label = { Text("Unit Bravo") })
+                        AssistChip(onClick = { email = "citizen@rapidresq.in"; password = "Citizen@123" }, label = { Text("Citizen") })
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
 
             // Login Card
@@ -122,21 +142,7 @@ fun LoginScreen(
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     
-                    Text("Select Role (Phase 2 Preview)", style = MaterialTheme.typography.labelMedium, color = SlateTextSecondary, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Role Selector
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            RoleChip(UserRole.CITIZEN, selectedRole == UserRole.CITIZEN, { selectedRole = it }, Modifier.weight(1f))
-                            RoleChip(UserRole.DISPATCHER, selectedRole == UserRole.DISPATCHER, { selectedRole = it }, Modifier.weight(1f))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            RoleChip(UserRole.RESPONDER, selectedRole == UserRole.RESPONDER, { selectedRole = it }, Modifier.weight(1f))
-                            RoleChip(UserRole.ADMIN, selectedRole == UserRole.ADMIN, { selectedRole = it }, Modifier.weight(1f))
-                        }
-                    }
-
+                    Text("Sign In", style = MaterialTheme.typography.headlineSmall, color = BrandNavy, fontWeight = FontWeight.ExtraBold)
                     Spacer(modifier = Modifier.height(24.dp))
 
                     OutlinedTextField(
@@ -144,6 +150,7 @@ fun LoginScreen(
                         onValueChange = { 
                             email = it
                             emailError = false
+                            loginErrorMsg = null
                         },
                         label = { Text("Email Address") },
                         isError = emailError,
@@ -170,6 +177,7 @@ fun LoginScreen(
                         onValueChange = { 
                             password = it
                             passwordError = false
+                            loginErrorMsg = null
                         },
                         label = { Text("Password") },
                         isError = passwordError,
@@ -195,6 +203,12 @@ fun LoginScreen(
                         Text("Password must be at least 6 characters", color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
                     }
 
+                    if (loginErrorMsg != null) {
+                        Surface(color = EmergencyRedBg, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            Text(loginErrorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     TextButton(
@@ -211,8 +225,7 @@ fun LoginScreen(
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
                     ) {
-                        val buttonText = if (selectedRole == UserRole.CITIZEN) "Sign In as Citizen" else "Continue to 2-Step OTP"
-                        Text(buttonText, color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text("Sign In", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -231,31 +244,5 @@ fun LoginScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
         }
-    }
-}
-
-@Composable
-private fun RoleChip(
-    role: UserRole,
-    isSelected: Boolean,
-    onSelect: (UserRole) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val bgColor = if (isSelected) BrandBlue else LightSurfaceVariant
-    val textColor = if (isSelected) Color.White else SlateTextPrimary
-
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = bgColor,
-        modifier = modifier.clickable { onSelect(role) }
-    ) {
-        Text(
-            text = role.label,
-            color = textColor,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 8.dp),
-            textAlign = TextAlign.Center
-        )
     }
 }

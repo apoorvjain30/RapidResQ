@@ -3,6 +3,7 @@ package com.rapidresq.app.ui.screens.auth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -21,10 +22,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.rapidresq.app.ui.theme.*
+import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterCitizenScreen(
+    viewModel: RapidResQViewModel,
     onBack: () -> Unit,
     onProceedToOtp: (String) -> Unit,
     onGuestSosClick: () -> Unit,
@@ -37,6 +40,8 @@ fun RegisterCitizenScreen(
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
+
+    var registerErrorMsg by remember { mutableStateOf<String?>(null) }
 
     val isPasswordValid = password.length >= 8 && password.any { it.isUpperCase() } && password.any { it.isLowerCase() } && password.any { it.isDigit() }
     val isFormValid = name.isNotBlank() && email.contains("@") && phone.length == 10 && isPasswordValid && password == confirmPassword
@@ -91,7 +96,7 @@ fun RegisterCitizenScreen(
 
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = { email = it; registerErrorMsg = null },
                 label = { Text("Email Address") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
@@ -128,7 +133,6 @@ fun RegisterCitizenScreen(
                 colors = defaultTextFieldColors()
             )
             
-            // Password Checklist
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 PasswordRuleItem("8+ characters", password.length >= 8)
                 PasswordRuleItem("Uppercase & lowercase", password.any { it.isUpperCase() } && password.any { it.isLowerCase() })
@@ -153,10 +157,25 @@ fun RegisterCitizenScreen(
                 colors = defaultTextFieldColors()
             )
 
+            if (registerErrorMsg != null) {
+                Surface(color = EmergencyRedBg, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                    Text(registerErrorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
-                onClick = { if (isFormValid) onProceedToOtp(email) },
+                onClick = {
+                    if (isFormValid) {
+                        val result = viewModel.registerCitizen(name, email, phone, password)
+                        if (result.isSuccess) {
+                            onProceedToOtp(email)
+                        } else {
+                            registerErrorMsg = result.exceptionOrNull()?.message
+                        }
+                    }
+                },
                 enabled = isFormValid,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)

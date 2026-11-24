@@ -27,10 +27,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rapidresq.app.ui.theme.*
+import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForgotPasswordScreen(
+    viewModel: RapidResQViewModel,
     onBack: () -> Unit,
     onBackToLogin: () -> Unit,
     modifier: Modifier = Modifier
@@ -42,6 +44,9 @@ fun ForgotPasswordScreen(
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    val simulatedNotice by viewModel.simulatedOtpNotice.collectAsState()
 
     Column(
         modifier = modifier
@@ -71,7 +76,7 @@ fun ForgotPasswordScreen(
             // Progress Indicator
             if (step < 4) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -82,17 +87,20 @@ fun ForgotPasswordScreen(
                     StepDot(3, "New Password", step >= 3)
                 }
 
-                Surface(
-                    color = InfoCyanBg,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
-                ) {
-                    Text(
-                        text = "Phase 2 UI: Real server-side reset & audit logging (PASSWORD_RESET) arrive in Phase 3.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = InfoCyan,
-                        modifier = Modifier.padding(12.dp)
-                    )
+                if (simulatedNotice != null && step == 2) {
+                    Surface(
+                        color = InfoCyanBg,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+                    ) {
+                        Text(
+                            text = simulatedNotice!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = InfoCyan,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
                 }
             }
 
@@ -102,16 +110,29 @@ fun ForgotPasswordScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     OutlinedTextField(
                         value = email,
-                        onValueChange = { email = it },
+                        onValueChange = { email = it; errorMsg = null },
                         label = { Text("Email Address") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         colors = defaultTextFieldColors()
                     )
+                    if (errorMsg != null) {
+                        Text(errorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { if (email.contains("@")) step = 2 },
+                        onClick = {
+                            if (email.contains("@")) {
+                                val res = viewModel.requestPasswordResetOtp(email)
+                                if (res.isSuccess) {
+                                    step = 2
+                                    errorMsg = null
+                                } else {
+                                    errorMsg = res.exceptionOrNull()?.message
+                                }
+                            }
+                        },
                         enabled = email.contains("@"),
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
@@ -127,7 +148,10 @@ fun ForgotPasswordScreen(
                     
                     BasicTextField(
                         value = otpValue,
-                        onValueChange = { if (it.length <= 6) otpValue = it.filter { char -> char.isDigit() } },
+                        onValueChange = { 
+                            if (it.length <= 6) otpValue = it.filter { char -> char.isDigit() }
+                            errorMsg = null 
+                        },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         decorationBox = {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -137,12 +161,13 @@ fun ForgotPasswordScreen(
                                         else -> otpValue[index].toString()
                                     }
                                     val isFocused = index == otpValue.length || (index == 5 && otpValue.length == 6)
+                                    val borderColor = if (errorMsg != null) EmergencyRed else if (isFocused) BrandBlue else SubtleBorder
                                     Box(
                                         modifier = Modifier
                                             .weight(1f)
                                             .aspectRatio(1f)
                                             .background(LightSurface, RoundedCornerShape(8.dp))
-                                            .border(2.dp, if (isFocused) BrandBlue else SubtleBorder, RoundedCornerShape(8.dp)),
+                                            .border(2.dp, borderColor, RoundedCornerShape(8.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(char, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = SlateTextPrimary)
@@ -151,9 +176,20 @@ fun ForgotPasswordScreen(
                             }
                         }
                     )
+                    if (errorMsg != null) {
+                        Text(errorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                    }
                     Spacer(modifier = Modifier.height(32.dp))
                     Button(
-                        onClick = { step = 3 },
+                        onClick = {
+                            val res = viewModel.verifyResetOtp(email, otpValue)
+                            if (res.isSuccess) {
+                                step = 3
+                                errorMsg = null
+                            } else {
+                                errorMsg = res.exceptionOrNull()?.message
+                            }
+                        },
                         enabled = otpValue.length == 6,
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
@@ -170,7 +206,7 @@ fun ForgotPasswordScreen(
                     
                     OutlinedTextField(
                         value = newPassword,
-                        onValueChange = { newPassword = it },
+                        onValueChange = { newPassword = it; errorMsg = null },
                         label = { Text("New Password") },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -193,7 +229,7 @@ fun ForgotPasswordScreen(
                     
                     OutlinedTextField(
                         value = confirmPassword,
-                        onValueChange = { confirmPassword = it },
+                        onValueChange = { confirmPassword = it; errorMsg = null },
                         label = { Text("Confirm New Password") },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = PasswordVisualTransformation(),
@@ -202,10 +238,24 @@ fun ForgotPasswordScreen(
                         colors = defaultTextFieldColors()
                     )
 
+                    if (errorMsg != null) {
+                        Text(errorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
                     
                     Button(
-                        onClick = { if (isFormValid) step = 4 },
+                        onClick = {
+                            if (isFormValid) {
+                                val res = viewModel.completePasswordReset(email, newPassword)
+                                if (res.isSuccess) {
+                                    step = 4
+                                    errorMsg = null
+                                } else {
+                                    errorMsg = res.exceptionOrNull()?.message
+                                }
+                            }
+                        },
                         enabled = isFormValid,
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
@@ -245,7 +295,7 @@ fun ForgotPasswordScreen(
 }
 
 @Composable
-fun StepDot(stepNum: Int, label: String, isActive: Boolean) {
+private fun StepDot(stepNum: Int, label: String, isActive: Boolean) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
