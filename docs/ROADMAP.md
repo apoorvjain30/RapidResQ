@@ -1,8 +1,8 @@
 # RapidResQ Development Roadmap
 
 - [x] **Phase 1:** Core Android Prototype (UI Design System, Role Entry, Citizen Report + Media Picker, Dispatcher Verify/Reject/Assign, Responder Lifecycle, Live Tracking, Audit Log — *Local Demo State*)
-- [ ] **Phase 2:** Admin Governance Dashboard (units, departments/agencies, staff directory, searchable audit log), UI/UX Polish, Splash/Onboarding, and Auth UI shells (Login, Citizen Registration + Guest SOS, 2-Step OTP MFA, Forgot/Reset Password).
-- [ ] **Phase 3:** Real Role-Based Auth (Citizen optional / Staff mandatory), Password + 2-Step OTP MFA, Password Reset flow with lockout/validation, RBAC guards, and Android Keystore session storage.
+- [x] **Phase 2:** Admin Governance Dashboard (units, departments/agencies, staff directory, searchable audit log), UI/UX Polish, Splash/Onboarding, and Auth UI shells (Login, Citizen Registration + Guest SOS, 2-Step OTP MFA, Forgot/Reset Password).
+- [x] **Phase 3:** Real Role-Based Auth (Citizen optional / Staff mandatory), Password + 2-Step OTP MFA, Password Reset flow with lockout/validation, RBAC guards, and Android Keystore session storage.
 - [ ] **Phase 4:** Full Media Handling (CameraX capture + short video compression/limits)
 - [ ] **Phase 5:** Node.js + Express + Socket.IO Backend, Supabase (PostgreSQL + PostGIS) Persistence, and real Email/SMS OTP delivery.
 - [ ] **Phase 6:** Smart Dispatch Scoring, Duplicate Clustering & Unacknowledged Escalation Timers
