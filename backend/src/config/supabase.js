@@ -1,0 +1,18 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+
+if (!supabaseUrl || !supabaseSecretKey) {
+  console.warn('[SUPABASE] Warning: SUPABASE_URL or SUPABASE_SECRET_KEY missing in environment. Supabase integration will be unavailable until configured.');
+}
+
+export const supabase = (supabaseUrl && supabaseSecretKey)
+  ? createClient(supabaseUrl, supabaseSecretKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+  : null;
