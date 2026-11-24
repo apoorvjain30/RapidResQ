@@ -24,6 +24,12 @@ import com.rapidresq.app.ui.screens.dispatcher.DispatcherDashboardScreen
 import com.rapidresq.app.ui.screens.entry.RoleEntryScreen
 import com.rapidresq.app.ui.screens.responder.ResponderDashboardScreen
 import com.rapidresq.app.ui.screens.admin.AdminDashboardScreen
+import com.rapidresq.app.ui.screens.onboarding.SplashScreen
+import com.rapidresq.app.ui.screens.onboarding.OnboardingScreen
+import com.rapidresq.app.ui.screens.auth.LoginScreen
+import com.rapidresq.app.ui.screens.auth.RegisterCitizenScreen
+import com.rapidresq.app.ui.screens.auth.OtpVerificationScreen
+import com.rapidresq.app.ui.screens.auth.ForgotPasswordScreen
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @Composable
@@ -46,9 +52,89 @@ fun RapidResQNavGraph() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = "role_entry",
+            startDestination = "splash",
             modifier = Modifier.padding(innerPadding)
         ) {
+            composable("splash") {
+                SplashScreen(
+                    onFinished = {
+                        navController.navigate("onboarding") {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    }
+                )
+            }
+            composable("onboarding") {
+                OnboardingScreen(
+                    onFinishOnboarding = {
+                        navController.navigate("login") {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
+                    },
+                    onGuestSosClick = { navController.navigate("citizen_home") }
+                )
+            }
+            composable("login") {
+                LoginScreen(
+                    onGuestSosClick = { navController.navigate("citizen_home") },
+                    onRequireOtp = { role, email -> 
+                        val encodedEmail = email.replace(".", "%2E") // simple encoding for demo
+                        navController.navigate("otp_verify/${role.name}/$encodedEmail")
+                    },
+                    onCitizenSignedIn = { navController.navigate("citizen_home") },
+                    onRegisterClick = { navController.navigate("register_citizen") },
+                    onForgotPasswordClick = { navController.navigate("forgot_password") },
+                    onOpenRoleSwitcher = { navController.navigate("role_entry") }
+                )
+            }
+            composable("register_citizen") {
+                RegisterCitizenScreen(
+                    onBack = { navController.popBackStack() },
+                    onProceedToOtp = { email -> 
+                        val encodedEmail = email.replace(".", "%2E")
+                        navController.navigate("otp_verify/${UserRole.CITIZEN.name}/$encodedEmail")
+                    },
+                    onGuestSosClick = { navController.navigate("citizen_home") }
+                )
+            }
+            composable(
+                route = "otp_verify/{roleName}/{email}",
+                arguments = listOf(
+                    navArgument("roleName") { type = NavType.StringType },
+                    navArgument("email") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val roleName = backStackEntry.arguments?.getString("roleName") ?: ""
+                val email = backStackEntry.arguments?.getString("email")?.replace("%2E", ".") ?: ""
+                
+                OtpVerificationScreen(
+                    roleName = roleName,
+                    email = email,
+                    onVerified = {
+                        val destination = when (roleName) {
+                            UserRole.CITIZEN.name -> "citizen_home"
+                            UserRole.DISPATCHER.name -> "dispatcher_dashboard"
+                            UserRole.RESPONDER.name -> "responder_dashboard"
+                            UserRole.ADMIN.name -> "admin_dashboard"
+                            else -> "role_entry"
+                        }
+                        navController.navigate(destination) {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable("forgot_password") {
+                ForgotPasswordScreen(
+                    onBack = { navController.popBackStack() },
+                    onBackToLogin = { 
+                        navController.navigate("login") {
+                            popUpTo("login") { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable("role_entry") {
                 RoleEntryScreen(
                     onSelectRole = { role ->
