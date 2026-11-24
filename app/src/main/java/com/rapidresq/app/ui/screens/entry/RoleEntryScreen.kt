@@ -93,6 +93,14 @@ fun RoleEntryScreen(
                 icon = { Icon(Icons.Default.LocalHospital, contentDescription = null, modifier = Modifier.size(32.dp)) }
             )
             
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            RoleCard(
+                role = UserRole.ADMIN,
+                onClick = { onSelectRole(UserRole.ADMIN) },
+                icon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(32.dp)) }
+            )
+            
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

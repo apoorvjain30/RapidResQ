@@ -80,8 +80,9 @@ fun StatusBadge(status: IncidentStatus, modifier: Modifier = Modifier) {
         shape = RoundedCornerShape(16.dp),
         modifier = modifier
     ) {
+        val displayStatus = status.name.lowercase().split("_").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
         Text(
-            text = status.name.replace("_", " "),
+            text = displayStatus,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
@@ -173,7 +174,9 @@ fun IncidentTimelineCard(timeline: List<TimelineEntry>, modifier: Modifier = Mod
                                 Text(
                                     text = dateFormat.format(Date(entry.timestamp)),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = SlateTextSecondary
+                                    color = SlateTextSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                             Text(

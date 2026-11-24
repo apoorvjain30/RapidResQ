@@ -12,6 +12,7 @@ interface IncidentRepository {
     val incidents: StateFlow<List<Incident>>
     val teams: StateFlow<List<ResponseTeam>>
     val auditLogs: StateFlow<List<AuditEntry>>
+    val staffAccounts: StateFlow<List<StaffAccount>>
 
     fun submitIncident(
         category: EmergencyCategory,
@@ -29,6 +30,10 @@ interface IncidentRepository {
     fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit>
     fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit>
     fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit>
+    
+    fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam>
+    fun toggleTeamAvailability(teamId: String): Result<Unit>
+    fun toggleStaffActive(staffId: String): Result<Unit>
 }
 
 class DemoIncidentRepository : IncidentRepository {
@@ -42,6 +47,9 @@ class DemoIncidentRepository : IncidentRepository {
 
     private val _auditLogs = MutableStateFlow<List<AuditEntry>>(emptyList())
     override val auditLogs: StateFlow<List<AuditEntry>> = _auditLogs.asStateFlow()
+
+    private val _staffAccounts = MutableStateFlow<List<StaffAccount>>(emptyList())
+    override val staffAccounts: StateFlow<List<StaffAccount>> = _staffAccounts.asStateFlow()
 
     private val secureRandom = SecureRandom()
     private val allowedChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // avoid 0/O/1/I
@@ -243,12 +251,63 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Incident not found"))
     }
 
+    override fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam> {
+        val team = ResponseTeam(
+            id = "TEAM-${UUID.randomUUID().toString().take(6).uppercase()}",
+            name = name,
+            unitType = unitType,
+            baseLocation = baseLocation,
+            isAvailable = true,
+            resolvedCount = 0
+        )
+        _teams.update { it + team }
+        logAudit(UserRole.ADMIN.label, "TEAM_CREATED", team.id, "Added $name ($unitType)")
+        return Result.success(team)
+    }
+
+    override fun toggleTeamAvailability(teamId: String): Result<Unit> {
+        val teamRes = updateTeam(teamId) { it.copy(isAvailable = !it.isAvailable) }
+        if (teamRes.isSuccess) {
+            val status = if (teamRes.getOrNull()?.isAvailable == true) "Available" else "Busy"
+            logAudit(UserRole.ADMIN.label, "TEAM_STATUS_CHANGED", teamId, "Marked as $status")
+            return Result.success(Unit)
+        }
+        return Result.failure(Exception("Team not found"))
+    }
+
+    override fun toggleStaffActive(staffId: String): Result<Unit> {
+        var updated: StaffAccount? = null
+        _staffAccounts.update { list ->
+            list.map {
+                if (it.id == staffId) {
+                    val newVal = it.copy(isActive = !it.isActive)
+                    updated = newVal
+                    newVal
+                } else it
+            }
+        }
+        return if (updated != null) {
+            val status = if (updated!!.isActive) "Activated" else "Suspended"
+            logAudit(UserRole.ADMIN.label, "STAFF_ACCESS_UPDATED", staffId, "Account $status")
+            Result.success(Unit)
+        } else {
+            Result.failure(Exception("Staff not found"))
+        }
+    }
+
     private fun seedDemoData() {
         _teams.value = listOf(
             ResponseTeam("TEAM-ALPHA", "Unit Alpha", "Medical EMS", "Indore Hospital", true, 12),
             ResponseTeam("TEAM-BRAVO", "Unit Bravo", "Fire & Hazmat", "Vijay Nagar Fire Station", false, 45),
             ResponseTeam("TEAM-CHARLIE", "Unit Charlie", "Traffic & Rescue", "Bhawarkua Square", true, 30),
             ResponseTeam("TEAM-DELTA", "Unit Delta", "Security Response", "Palasia Police Station", true, 18)
+        )
+
+        _staffAccounts.value = listOf(
+            StaffAccount("STAFF-1", "Admin Supriya", "supriya.admin@rapidresq.gov", UserRole.ADMIN, "System Governance", mfaEnabled = true),
+            StaffAccount("STAFF-2", "Dispatcher Raj", "raj.dispatch@rapidresq.gov", UserRole.DISPATCHER, "Central Command", mfaEnabled = true),
+            StaffAccount("STAFF-3", "Medic Vikram", "vikram.ems@rapidresq.gov", UserRole.RESPONDER, "Medical Division", "Unit Alpha", mfaEnabled = true),
+            StaffAccount("STAFF-4", "Officer Anil", "anil.police@rapidresq.gov", UserRole.RESPONDER, "Traffic Dept", "Unit Charlie", mfaEnabled = false)
         )
 
         val now = System.currentTimeMillis()

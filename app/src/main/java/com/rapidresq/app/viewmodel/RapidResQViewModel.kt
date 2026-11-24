@@ -17,6 +17,7 @@ class RapidResQViewModel(
     val incidents = repository.incidents
     val teams = repository.teams
     val auditLogs = repository.auditLogs
+    val staffAccounts = repository.staffAccounts
 
     private val _activeResponderTeamId = MutableStateFlow("TEAM-BRAVO")
     val activeResponderTeamId: StateFlow<String> = _activeResponderTeamId.asStateFlow()
@@ -101,6 +102,33 @@ class RapidResQViewModel(
             showStatus("Field note added")
         } else {
             showStatus("Failed to add field note: ${result.exceptionOrNull()?.message}")
+        }
+    }
+
+    fun addResponseTeam(name: String, unitType: String, baseLocation: String) {
+        val result = repository.addResponseTeam(name, unitType, baseLocation)
+        if (result.isSuccess) {
+            showStatus("Team added successfully")
+        } else {
+            showStatus("Failed to add team: ${result.exceptionOrNull()?.message}")
+        }
+    }
+
+    fun toggleTeamAvailability(teamId: String) {
+        val result = repository.toggleTeamAvailability(teamId)
+        if (result.isSuccess) {
+            showStatus("Team availability updated")
+        } else {
+            showStatus("Failed to update team: ${result.exceptionOrNull()?.message}")
+        }
+    }
+
+    fun toggleStaffActive(staffId: String) {
+        val result = repository.toggleStaffActive(staffId)
+        if (result.isSuccess) {
+            showStatus("Staff access updated")
+        } else {
+            showStatus("Failed to update staff: ${result.exceptionOrNull()?.message}")
         }
     }
 }

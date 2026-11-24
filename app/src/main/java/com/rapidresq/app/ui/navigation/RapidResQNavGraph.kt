@@ -23,6 +23,7 @@ import com.rapidresq.app.ui.screens.citizen.ReportEmergencyScreen
 import com.rapidresq.app.ui.screens.dispatcher.DispatcherDashboardScreen
 import com.rapidresq.app.ui.screens.entry.RoleEntryScreen
 import com.rapidresq.app.ui.screens.responder.ResponderDashboardScreen
+import com.rapidresq.app.ui.screens.admin.AdminDashboardScreen
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @Composable
@@ -55,6 +56,7 @@ fun RapidResQNavGraph() {
                             UserRole.CITIZEN -> navController.navigate("citizen_home")
                             UserRole.DISPATCHER -> navController.navigate("dispatcher_dashboard")
                             UserRole.RESPONDER -> navController.navigate("responder_dashboard")
+                            UserRole.ADMIN -> navController.navigate("admin_dashboard")
                         }
                     }
                 )
@@ -97,6 +99,12 @@ fun RapidResQNavGraph() {
             }
             composable("responder_dashboard") {
                 ResponderDashboardScreen(
+                    viewModel = viewModel,
+                    onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) }
+                )
+            }
+            composable("admin_dashboard") {
+                AdminDashboardScreen(
                     viewModel = viewModel,
                     onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) }
                 )

@@ -3,7 +3,8 @@ package com.rapidresq.app.data.model
 enum class UserRole(val label: String, val subtitle: String) {
     CITIZEN("Citizen", "Report incidents quickly"),
     DISPATCHER("Dispatcher", "Verify and assign resources"),
-    RESPONDER("First Responder", "Accept and resolve incidents")
+    RESPONDER("First Responder", "Accept and resolve incidents"),
+    ADMIN("Administrator", "Manage units, personnel & security audit logs")
 }
 
 enum class EmergencyCategory(
@@ -94,6 +95,17 @@ data class ResponseTeam(
     val baseLocation: String,
     val isAvailable: Boolean,
     val resolvedCount: Int
+)
+
+data class StaffAccount(
+    val id: String, 
+    val name: String, 
+    val email: String, 
+    val role: UserRole, 
+    val department: String, 
+    val assignedUnitName: String? = null, 
+    val mfaEnabled: Boolean = true, 
+    val isActive: Boolean = true
 )
 
 data class Incident(
