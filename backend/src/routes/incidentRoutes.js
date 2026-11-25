@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { supabase } from '../config/supabase.js';
 import { logAudit, formatIstTime } from '../services/audit.js';
+import { analyzeIncidentTriage } from '../services/geminiService.js';
 import { requireAuth } from '../middleware/auth.js';
 
 // In-memory fallback stores when Supabase is not connected
@@ -11,10 +12,10 @@ export const inMemoryIncidents = new Map();
 export const inMemoryTimeline = new Map(); // incidentId -> array of entries
 export const inMemoryNotes = new Map(); // incidentId -> array of notes
 export const inMemoryTeams = new Map([
-  ['TEAM-ALPHA', { id: 'TEAM-ALPHA', name: 'Unit Alpha', unitType: 'Medical EMS', baseLocation: 'Indore Hospital', isAvailable: true, resolvedCount: 12 }],
-  ['TEAM-BRAVO', { id: 'TEAM-BRAVO', name: 'Unit Bravo', unitType: 'Fire & Hazmat', baseLocation: 'Vijay Nagar Fire Station', isAvailable: false, resolvedCount: 45 }],
-  ['TEAM-CHARLIE', { id: 'TEAM-CHARLIE', name: 'Unit Charlie', unitType: 'Traffic & Rescue', baseLocation: 'Bhawarkua Square', isAvailable: true, resolvedCount: 30 }],
-  ['TEAM-DELTA', { id: 'TEAM-DELTA', name: 'Unit Delta', unitType: 'Security Response', baseLocation: 'Palasia Police Station', isAvailable: true, resolvedCount: 18 }]
+  ['TEAM-ALPHA', { id: 'TEAM-ALPHA', name: 'Unit Alpha', unitType: 'Medical EMS', baseLocation: 'Indore Hospital', lat: 22.7196, lng: 75.8577, isAvailable: true, resolvedCount: 12 }],
+  ['TEAM-BRAVO', { id: 'TEAM-BRAVO', name: 'Unit Bravo', unitType: 'Fire & Hazmat', baseLocation: 'Vijay Nagar Fire Station', lat: 22.7533, lng: 75.8937, isAvailable: false, resolvedCount: 45 }],
+  ['TEAM-CHARLIE', { id: 'TEAM-CHARLIE', name: 'Unit Charlie', unitType: 'Traffic & Rescue', baseLocation: 'Bhawarkua Square', lat: 22.6953, lng: 75.8679, isAvailable: true, resolvedCount: 30 }],
+  ['TEAM-DELTA', { id: 'TEAM-DELTA', name: 'Unit Delta', unitType: 'Security Response', baseLocation: 'Palasia Police Station', lat: 22.7231, lng: 75.8920, isAvailable: true, resolvedCount: 18 }]
 ]);
 
 // Seed initial realistic Indore demo incidents in memory
@@ -36,7 +37,11 @@ export const inMemoryTeams = new Map([
     status: 'EN_ROUTE',
     assignedTeamId: 'TEAM-BRAVO',
     assignedTeamName: 'Unit Bravo',
-    createdAt: now - 2 * hour
+    createdAt: now - 2 * hour,
+    aiSummary: 'Heavy smoke on 3rd floor of commercial complex in Vijay Nagar. Fire unit dispatched.',
+    aiSuggestedSeverity: 'CRITICAL',
+    aiRecommendedUnit: 'Fire & Hazmat',
+    aiSpamScore: 2
   };
 
   const inc2 = {
@@ -53,7 +58,11 @@ export const inMemoryTeams = new Map([
     status: 'VERIFIED',
     assignedTeamId: null,
     assignedTeamName: null,
-    createdAt: now - hour
+    createdAt: now - hour,
+    aiSummary: 'Two cars and a bike involved on Bhawarkua Road. Traffic blocked, rescue required.',
+    aiSuggestedSeverity: 'HIGH',
+    aiRecommendedUnit: 'Traffic & Rescue',
+    aiSpamScore: 4
   };
 
   const inc3 = {
@@ -70,7 +79,11 @@ export const inMemoryTeams = new Map([
     status: 'RESOLVED',
     assignedTeamId: 'TEAM-ALPHA',
     assignedTeamName: 'Unit Alpha',
-    createdAt: now - 5 * hour
+    createdAt: now - 5 * hour,
+    aiSummary: 'Elderly male unconscious with shallow breathing in Palasia. EMS dispatched and successfully resolved.',
+    aiSuggestedSeverity: 'CRITICAL',
+    aiRecommendedUnit: 'Medical EMS',
+    aiSpamScore: 1
   };
 
   [inc1, inc2, inc3].forEach(inc => inMemoryIncidents.set(inc.id, inc));
@@ -131,6 +144,7 @@ function generateIncidentId() {
 export function hydrateIncident(inc) {
   const timeline = inMemoryTimeline.get(inc.id) || [];
   const fieldNotes = inMemoryNotes.get(inc.id) || [];
+  const team = inc.assignedTeamId ? inMemoryTeams.get(inc.assignedTeamId) : null;
 
   return {
     id: inc.id,
@@ -147,7 +161,13 @@ export function hydrateIncident(inc) {
     status: inc.status,
     assignedTeamId: inc.assignedTeamId,
     assignedTeamName: inc.assignedTeamName,
+    assignedTeamLat: team ? team.lat : null,
+    assignedTeamLng: team ? team.lng : null,
     rejectionReason: inc.rejectionReason || null,
+    aiSummary: inc.aiSummary || null,
+    aiSuggestedSeverity: inc.aiSuggestedSeverity || null,
+    aiRecommendedUnit: inc.aiRecommendedUnit || null,
+    aiSpamScore: inc.aiSpamScore !== undefined ? inc.aiSpamScore : null,
     createdAt: inc.createdAt,
     timeline,
     fieldNotes
@@ -256,6 +276,17 @@ export function createIncidentRoutes(io) {
         }
       }
 
+      // Run AI Triage asynchronously or synchronously
+      const triage = await analyzeIncidentTriage({
+        category,
+        title: title || `${category} Emergency`,
+        description: description || '',
+        locationText,
+        severity: severity || 'HIGH',
+        mediaBuffer: req.file ? req.file.buffer : null,
+        mediaMimeType: req.file ? req.file.mimetype : null
+      });
+
       const newIncident = {
         id,
         category,
@@ -265,14 +296,18 @@ export function createIncidentRoutes(io) {
         gpsLabel: gpsLabel || (parsedLat && parsedLng ? `${parsedLat}° N, ${parsedLng}° E` : null),
         lat: isNaN(parsedLat) ? null : parsedLat,
         lng: isNaN(parsedLng) ? null : parsedLng,
-        severity: severity || 'HIGH',
+        severity: severity || triage.suggestedSeverity || 'HIGH',
         reporterContact: reporterContact || '',
         media: mediaAttachments,
         status: 'REPORTED',
         assignedTeamId: null,
         assignedTeamName: null,
         createdAt: now,
-        possibleDuplicateOf
+        possibleDuplicateOf,
+        aiSummary: triage.summary,
+        aiSuggestedSeverity: triage.suggestedSeverity,
+        aiRecommendedUnit: triage.recommendedUnit,
+        aiSpamScore: triage.spamRiskScore
       };
 
       inMemoryIncidents.set(id, newIncident);
@@ -296,7 +331,11 @@ export function createIncidentRoutes(io) {
             media_is_video: mediaAttachments ? Boolean(mediaAttachments[0]?.isVideo) : false,
             status: newIncident.status,
             created_at: new Date(now).toISOString(),
-            possible_duplicate_of: possibleDuplicateOf
+            possible_duplicate_of: possibleDuplicateOf,
+            ai_summary: triage.summary,
+            ai_suggested_severity: triage.suggestedSeverity,
+            ai_recommended_unit: triage.recommendedUnit,
+            ai_spam_score: triage.spamRiskScore
           }]);
 
           await supabase.from('incident_timeline').insert([{
@@ -729,6 +768,49 @@ export function createIncidentRoutes(io) {
       await broadcastUpdates(id);
 
       return res.status(201).json({ message: 'Note added', note: newNote });
+    } catch (err) {
+      res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  });
+
+  // 10. POST /api/incidents/:id/ai-triage
+  router.post('/:id/ai-triage', requireAuth('DISPATCHER', 'ADMIN'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const inc = inMemoryIncidents.get(id);
+      if (!inc) return res.status(404).json({ error: 'Not Found', message: 'Incident not found' });
+
+      const triage = await analyzeIncidentTriage({
+        category: inc.category,
+        title: inc.title,
+        description: inc.description,
+        locationText: inc.locationText,
+        severity: inc.severity,
+        mediaBuffer: null,
+        mediaMimeType: null
+      });
+
+      inc.aiSummary = triage.summary;
+      inc.aiSuggestedSeverity = triage.suggestedSeverity;
+      inc.aiRecommendedUnit = triage.recommendedUnit;
+      inc.aiSpamScore = triage.spamRiskScore;
+      inMemoryIncidents.set(id, inc);
+
+      if (supabase) {
+        try {
+          await supabase.from('incidents').update({
+            ai_summary: triage.summary,
+            ai_suggested_severity: triage.suggestedSeverity,
+            ai_recommended_unit: triage.recommendedUnit,
+            ai_spam_score: triage.spamRiskScore
+          }).eq('id', id);
+        } catch (dbErr) {
+          console.error('[DB AI TRIAGE UPDATE ERROR]', dbErr.message);
+        }
+      }
+
+      await broadcastUpdates(id);
+      return res.json(hydrateIncident(inc));
     } catch (err) {
       res.status(500).json({ error: 'Server Error', message: err.message });
     }

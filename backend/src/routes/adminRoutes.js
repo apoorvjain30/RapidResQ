@@ -2,7 +2,7 @@ import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { inMemoryUsers } from '../config/seed.js';
 import { inMemoryTeams, inMemoryIncidents } from './incidentRoutes.js';
-import { logAudit } from '../services/audit.js';
+import { logAudit, verifyAuditChain } from '../services/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 
 export function createAdminRoutes(io) {
@@ -234,6 +234,62 @@ export function createAdminRoutes(io) {
 
       // Return empty array if DB not connected yet
       return res.json([]);
+    } catch (err) {
+      res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  });
+
+  // 8. GET /api/admin/audit/verify
+  router.get('/audit/verify', requireAuth('ADMIN', 'DISPATCHER'), async (req, res) => {
+    try {
+      const result = await verifyAuditChain();
+      return res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  });
+
+  // 9. GET /api/admin/analytics
+  router.get('/analytics', requireAuth('ADMIN', 'DISPATCHER'), async (req, res) => {
+    try {
+      const incidents = Array.from(inMemoryIncidents.values());
+      const teams = Array.from(inMemoryTeams.values());
+
+      const totalIncidents = incidents.length;
+      const activeIncidents = incidents.filter(i => !['RESOLVED', 'REJECTED'].includes(i.status)).length;
+      const resolvedIncidents = incidents.filter(i => i.status === 'RESOLVED').length;
+      const rejectedIncidents = incidents.filter(i => i.status === 'REJECTED').length;
+
+      let totalEscalations = 0;
+      const byCategory = {};
+      const bySeverity = {};
+      const byStatus = {};
+
+      incidents.forEach(i => {
+        byCategory[i.category] = (byCategory[i.category] || 0) + 1;
+        bySeverity[i.severity] = (bySeverity[i.severity] || 0) + 1;
+        byStatus[i.status] = (byStatus[i.status] || 0) + 1;
+      });
+
+      const topUnits = teams.map(t => ({
+        id: t.id,
+        name: t.name,
+        unitType: t.unitType,
+        resolvedCount: t.resolvedCount || 0,
+        isAvailable: t.isAvailable
+      })).sort((a, b) => b.resolvedCount - a.resolvedCount);
+
+      return res.json({
+        totalIncidents,
+        activeIncidents,
+        resolvedIncidents,
+        rejectedIncidents,
+        totalEscalations,
+        byCategory,
+        bySeverity,
+        byStatus,
+        topUnits
+      });
     } catch (err) {
       res.status(500).json({ error: 'Server Error', message: err.message });
     }

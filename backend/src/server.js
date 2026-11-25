@@ -12,6 +12,7 @@ import { startEscalationMonitor } from './services/escalation.js';
 import authRoutes from './routes/authRoutes.js';
 import { createIncidentRoutes } from './routes/incidentRoutes.js';
 import { createAdminRoutes } from './routes/adminRoutes.js';
+import { createAiRoutes } from './routes/aiRoutes.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +50,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/incidents', createIncidentRoutes(io));
 app.use('/api/admin', createAdminRoutes(io));
+app.use('/api/ai', createAiRoutes());
 
 // Socket.IO Authentication & Room Management
 io.on('connection', (socket) => {
