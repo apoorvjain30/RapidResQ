@@ -11,8 +11,10 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,11 +23,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.rapidresq.app.data.model.IncidentSeverity
 import com.rapidresq.app.data.model.IncidentStatus
-import com.rapidresq.app.ui.components.CategoryIcon
-import com.rapidresq.app.ui.components.IncidentTimelineCard
-import com.rapidresq.app.ui.components.SeverityBadge
-import com.rapidresq.app.ui.components.StatusBadge
+import com.rapidresq.app.ui.components.*
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
@@ -39,6 +39,10 @@ fun CitizenTrackScreen(
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val incident = incidents.find { it.id == incidentId }
+
+    LaunchedEffect(incidentId) {
+        viewModel.trackIncident(incidentId)
+    }
 
     Column(
         modifier = modifier
@@ -123,6 +127,58 @@ fun CitizenTrackScreen(
                                     Text(incident.gpsLabel, style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary, modifier = Modifier.padding(top = 4.dp))
                                 }
                             }
+                        }
+                    }
+                }
+
+                // Map View item if coordinates available
+                if (incident.lat != null && incident.lng != null) {
+                    item {
+                        val pins = remember(incident) {
+                            val list = mutableListOf<MapPin>()
+                            list.add(
+                                MapPin(
+                                    id = incident.id,
+                                    title = incident.title,
+                                    snippet = incident.locationText,
+                                    lat = incident.lat,
+                                    lng = incident.lng,
+                                    pinType = if (incident.severity == IncidentSeverity.CRITICAL) MapPinType.INCIDENT_CRITICAL else MapPinType.INCIDENT_NORMAL
+                                )
+                            )
+                            if (incident.assignedTeamLat != null && incident.assignedTeamLng != null && incident.assignedTeamName != null) {
+                                list.add(
+                                    MapPin(
+                                        id = "TEAM_${incident.assignedTeamId}",
+                                        title = incident.assignedTeamName,
+                                        snippet = "Live Unit Location",
+                                        lat = incident.assignedTeamLat,
+                                        lng = incident.assignedTeamLng,
+                                        pinType = MapPinType.RESPONDER_UNIT
+                                    )
+                                )
+                            }
+                            list
+                        }
+
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Live Map Tracking", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = SlateTextPrimary)
+                                if (incident.assignedTeamLat != null) {
+                                    Text("Unit En Route", style = MaterialTheme.typography.labelSmall, color = BrandBlue, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            RapidResQMapCard(
+                                pins = pins,
+                                centerLat = incident.lat,
+                                centerLng = incident.lng,
+                                zoom = 14.0,
+                                height = 220.dp
+                            )
                         }
                     }
                 }

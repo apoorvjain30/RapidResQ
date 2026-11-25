@@ -1,7 +1,7 @@
 import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { inMemoryUsers } from '../config/seed.js';
-import { inMemoryTeams } from './incidentRoutes.js';
+import { inMemoryTeams, inMemoryIncidents } from './incidentRoutes.js';
 import { logAudit } from '../services/audit.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -33,8 +33,8 @@ export function createAdminRoutes(io) {
         name,
         unitType,
         baseLocation,
-        lat: parseFloat(lat) || null,
-        lng: parseFloat(lng) || null,
+        lat: parseFloat(lat) || 22.7196,
+        lng: parseFloat(lng) || 75.8577,
         isAvailable: true,
         resolvedCount: 0
       };
@@ -100,7 +100,63 @@ export function createAdminRoutes(io) {
     }
   });
 
-  // 4. GET /api/admin/staff
+  // 4. PATCH /api/admin/teams/:id/location
+  router.patch('/teams/:id/location', requireAuth('RESPONDER', 'ADMIN'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { lat, lng } = req.body;
+
+      const numLat = parseFloat(lat);
+      const numLng = parseFloat(lng);
+
+      if (isNaN(numLat) || numLat < -90 || numLat > 90 || isNaN(numLng) || numLng < -180 || numLng > 180) {
+        return res.status(400).json({ error: 'Validation Error', message: 'Valid numeric lat (-90 to 90) and lng (-180 to 180) are required' });
+      }
+
+      if (req.user.role === 'RESPONDER' && req.user.assigned_team_id !== id) {
+        await logAudit('Responder', 'ACCESS_DENIED_403', id, `Team ${req.user.assigned_team_id} attempted unauthorized location update for ${id}`);
+        return res.status(403).json({ error: 'Access Denied', message: 'ACCESS_DENIED_403: Cannot update location for another unit' });
+      }
+
+      const team = inMemoryTeams.get(id);
+      if (!team) {
+        return res.status(404).json({ error: 'Not Found', message: `Team ${id} not found` });
+      }
+
+      team.lat = numLat;
+      team.lng = numLng;
+      inMemoryTeams.set(id, team);
+
+      if (supabase) {
+        try {
+          await supabase.from('response_teams').update({
+            lat: numLat,
+            lng: numLng
+          }).eq('id', id);
+        } catch (dbErr) {
+          console.error('[ADMIN DB LOCATION UPDATE ERROR]', dbErr.message);
+        }
+      }
+
+      const locationPayload = { teamId: id, name: team.name, lat: numLat, lng: numLng };
+
+      // Broadcast to staff room
+      io.to('staff').emit('team:location', locationPayload);
+
+      // Broadcast to active tracking rooms
+      for (const incident of inMemoryIncidents.values()) {
+        if (incident.assignedTeamId === id && !['RESOLVED', 'REJECTED'].includes(incident.status)) {
+          io.to(`track:${incident.id}`).emit('team:location', { ...locationPayload, incidentId: incident.id });
+        }
+      }
+
+      return res.json({ message: 'Location updated', team });
+    } catch (err) {
+      res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  });
+
+  // 5. GET /api/admin/staff
   router.get('/staff', requireAuth('ADMIN'), async (req, res) => {
     try {
       const staffList = Array.from(inMemoryUsers.values()).map(user => {
@@ -115,7 +171,7 @@ export function createAdminRoutes(io) {
     }
   });
 
-  // 5. PATCH /api/admin/staff/:id/toggle
+  // 6. PATCH /api/admin/staff/:id/toggle
   router.patch('/staff/:id/toggle', requireAuth('ADMIN'), async (req, res) => {
     try {
       const { id } = req.params;
@@ -157,7 +213,7 @@ export function createAdminRoutes(io) {
     }
   });
 
-  // 6. GET /api/admin/audit
+  // 7. GET /api/admin/audit
   router.get('/audit', requireAuth('DISPATCHER', 'ADMIN'), async (req, res) => {
     try {
       if (supabase) {

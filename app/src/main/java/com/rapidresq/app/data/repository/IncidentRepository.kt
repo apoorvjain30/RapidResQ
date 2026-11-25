@@ -14,7 +14,7 @@ interface IncidentRepository {
     val auditLogs: StateFlow<List<AuditEntry>>
     val staffAccounts: StateFlow<List<StaffAccount>>
 
-    fun submitIncident(
+    suspend fun submitIncident(
         category: EmergencyCategory,
         title: String,
         description: String,
@@ -22,19 +22,26 @@ interface IncidentRepository {
         gpsLabel: String?,
         severity: IncidentSeverity,
         reporterContact: String,
-        media: List<MediaAttachment>?
+        media: List<MediaAttachment>?,
+        lat: Double? = null,
+        lng: Double? = null
     ): Result<String>
 
-    fun verifyIncident(incidentId: String, actor: String): Result<Unit>
-    fun rejectIncident(incidentId: String, reason: String, actor: String): Result<Unit>
-    fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit>
-    fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit>
-    fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit>
+    suspend fun verifyIncident(incidentId: String, actor: String): Result<Unit>
+    suspend fun rejectIncident(incidentId: String, reason: String, actor: String): Result<Unit>
+    suspend fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit>
+    suspend fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit>
+    suspend fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit>
     
-    fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam>
-    fun toggleTeamAvailability(teamId: String): Result<Unit>
-    fun toggleStaffActive(staffId: String): Result<Unit>
+    suspend fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam>
+    suspend fun toggleTeamAvailability(teamId: String): Result<Unit>
+    suspend fun updateTeamLocation(teamId: String, lat: Double, lng: Double): Result<Unit>
+    suspend fun toggleStaffActive(staffId: String): Result<Unit>
     fun logSecurityEvent(actorRole: String, action: String, incidentId: String = "SYSTEM", details: String)
+
+    suspend fun fetchRecommendedTeams(incidentId: String): Result<List<RankedTeam>>
+    suspend fun trackIncident(incidentId: String): Result<Incident>
+    suspend fun refreshAllData()
 }
 
 class DemoIncidentRepository : IncidentRepository {
@@ -112,7 +119,7 @@ class DemoIncidentRepository : IncidentRepository {
         return updatedTeam?.let { Result.success(it) } ?: Result.failure(Exception("Team not found"))
     }
 
-    override fun submitIncident(
+    override suspend fun submitIncident(
         category: EmergencyCategory,
         title: String,
         description: String,
@@ -120,7 +127,9 @@ class DemoIncidentRepository : IncidentRepository {
         gpsLabel: String?,
         severity: IncidentSeverity,
         reporterContact: String,
-        media: List<MediaAttachment>?
+        media: List<MediaAttachment>?,
+        lat: Double?,
+        lng: Double?
     ): Result<String> {
         val id = generateTrackingId()
         val now = System.currentTimeMillis()
@@ -131,6 +140,8 @@ class DemoIncidentRepository : IncidentRepository {
             description = description,
             locationText = locationText,
             gpsLabel = gpsLabel,
+            lat = lat ?: 22.7196,
+            lng = lng ?: 75.8577,
             severity = severity,
             reporterContact = reporterContact,
             media = media,
@@ -143,7 +154,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.success(id)
     }
 
-    override fun verifyIncident(incidentId: String, actor: String): Result<Unit> {
+    override suspend fun verifyIncident(incidentId: String, actor: String): Result<Unit> {
         val incident = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
         if (incident.status != IncidentStatus.REPORTED) {
             return Result.failure(Exception("Only REPORTED incidents can be verified"))
@@ -163,7 +174,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Update failed"))
     }
 
-    override fun rejectIncident(incidentId: String, reason: String, actor: String): Result<Unit> {
+    override suspend fun rejectIncident(incidentId: String, reason: String, actor: String): Result<Unit> {
         val incident = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
         if (incident.status != IncidentStatus.REPORTED) {
             return Result.failure(Exception("Only REPORTED incidents can be rejected"))
@@ -184,7 +195,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Update failed"))
     }
 
-    override fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit> {
+    override suspend fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit> {
         val incident = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
         if (incident.status != IncidentStatus.VERIFIED) {
             return Result.failure(Exception("Only VERIFIED incidents can be assigned"))
@@ -213,7 +224,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Update failed"))
     }
 
-    override fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit> {
+    override suspend fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit> {
         val incident = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
         
         if (incident.assignedTeamId != teamId) {
@@ -243,7 +254,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Update failed"))
     }
 
-    override fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit> {
+    override suspend fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit> {
         val now = System.currentTimeMillis()
         val note = FieldNote(now, author, text)
         val res = updateIncident(incidentId) {
@@ -256,7 +267,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Incident not found"))
     }
 
-    override fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam> {
+    override suspend fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam> {
         val team = ResponseTeam(
             id = "TEAM-${UUID.randomUUID().toString().take(6).uppercase()}",
             name = name,
@@ -270,7 +281,7 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.success(team)
     }
 
-    override fun toggleTeamAvailability(teamId: String): Result<Unit> {
+    override suspend fun toggleTeamAvailability(teamId: String): Result<Unit> {
         val teamRes = updateTeam(teamId) { it.copy(isAvailable = !it.isAvailable) }
         if (teamRes.isSuccess) {
             val status = if (teamRes.getOrNull()?.isAvailable == true) "Available" else "Busy"
@@ -280,7 +291,15 @@ class DemoIncidentRepository : IncidentRepository {
         return Result.failure(Exception("Team not found"))
     }
 
-    override fun toggleStaffActive(staffId: String): Result<Unit> {
+    override suspend fun updateTeamLocation(teamId: String, lat: Double, lng: Double): Result<Unit> {
+        val teamRes = updateTeam(teamId) { it.copy(lat = lat, lng = lng) }
+        if (teamRes.isSuccess) {
+            return Result.success(Unit)
+        }
+        return Result.failure(Exception("Team not found"))
+    }
+
+    override suspend fun toggleStaffActive(staffId: String): Result<Unit> {
         var updated: StaffAccount? = null
         _staffAccounts.update { list ->
             list.map {
@@ -300,12 +319,41 @@ class DemoIncidentRepository : IncidentRepository {
         }
     }
 
+    override suspend fun fetchRecommendedTeams(incidentId: String): Result<List<RankedTeam>> {
+        val inc = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
+        val recType = inc.category.recommendedUnitType
+        val ranked = _teams.value.map { team ->
+            RankedTeam(
+                id = team.id,
+                name = team.name,
+                unitType = team.unitType,
+                baseLocation = team.baseLocation,
+                isAvailable = team.isAvailable,
+                resolvedCount = team.resolvedCount,
+                distanceKm = (1..50).random() / 10.0,
+                isRecommended = team.unitType == recType,
+                lat = team.lat,
+                lng = team.lng
+            )
+        }
+        return Result.success(ranked)
+    }
+
+    override suspend fun trackIncident(incidentId: String): Result<Incident> {
+        val inc = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
+        return Result.success(inc)
+    }
+
+    override suspend fun refreshAllData() {
+        // In-memory demo store does not need refresh
+    }
+
     private fun seedDemoData() {
         _teams.value = listOf(
-            ResponseTeam("TEAM-ALPHA", "Unit Alpha", "Medical EMS", "Indore Hospital", true, 12),
-            ResponseTeam("TEAM-BRAVO", "Unit Bravo", "Fire & Hazmat", "Vijay Nagar Fire Station", false, 45),
-            ResponseTeam("TEAM-CHARLIE", "Unit Charlie", "Traffic & Rescue", "Bhawarkua Square", true, 30),
-            ResponseTeam("TEAM-DELTA", "Unit Delta", "Security Response", "Palasia Police Station", true, 18)
+            ResponseTeam("TEAM-ALPHA", "Unit Alpha", "Medical EMS", "Indore Hospital", true, 12, 22.7196, 75.8577),
+            ResponseTeam("TEAM-BRAVO", "Unit Bravo", "Fire & Hazmat", "Vijay Nagar Fire Station", false, 45, 22.7533, 75.8937),
+            ResponseTeam("TEAM-CHARLIE", "Unit Charlie", "Traffic & Rescue", "Bhawarkua Square", true, 30, 22.6953, 75.8679),
+            ResponseTeam("TEAM-DELTA", "Unit Delta", "Security Response", "Palasia Police Station", true, 18, 22.7231, 75.8920)
         )
 
         _staffAccounts.value = listOf(
@@ -326,11 +374,15 @@ class DemoIncidentRepository : IncidentRepository {
             description = "Heavy smoke spotted on 3rd floor of commercial complex",
             locationText = "Vijay Nagar Square, near Mall",
             gpsLabel = "22.7533, 75.8937",
+            lat = 22.7533,
+            lng = 75.8937,
             severity = IncidentSeverity.CRITICAL,
             reporterContact = "9876543210",
             status = IncidentStatus.EN_ROUTE,
             assignedTeamId = "TEAM-BRAVO",
             assignedTeamName = "Unit Bravo",
+            assignedTeamLat = 22.7533,
+            assignedTeamLng = 75.8937,
             createdAt = now - 2 * hour,
             timeline = listOf(
                 TimelineEntry(now - 2 * hour, "Reported", "Citizen"),
@@ -349,6 +401,8 @@ class DemoIncidentRepository : IncidentRepository {
             description = "Two cars and a bike involved, traffic blocked",
             locationText = "Bhawarkua Road",
             gpsLabel = "22.6953, 75.8679",
+            lat = 22.6953,
+            lng = 75.8679,
             severity = IncidentSeverity.HIGH,
             reporterContact = "9876543211",
             status = IncidentStatus.VERIFIED,
@@ -367,11 +421,15 @@ class DemoIncidentRepository : IncidentRepository {
             description = "Elderly male unconscious, breathing shallow",
             locationText = "Palasia",
             gpsLabel = "22.7231, 75.8920",
+            lat = 22.7231,
+            lng = 75.8920,
             severity = IncidentSeverity.CRITICAL,
             reporterContact = "9876543212",
             status = IncidentStatus.RESOLVED,
             assignedTeamId = "TEAM-ALPHA",
             assignedTeamName = "Unit Alpha",
+            assignedTeamLat = 22.7196,
+            assignedTeamLng = 75.8577,
             createdAt = now - 5 * hour,
             timeline = listOf(
                 TimelineEntry(now - 5 * hour, "Reported", "Citizen"),

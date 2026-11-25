@@ -5,9 +5,7 @@ plugins {
 
 android {
     namespace = "com.rapidresq.app"
-    compileSdk {
-        version = release(37)
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.rapidresq.app"
@@ -63,4 +61,14 @@ dependencies {
     // Coil for loading citizen-selected photo & short video thumbnails smoothly
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("io.coil-kt:coil-video:2.7.0")
+
+    // Networking & Real-Time Socket.IO
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("io.socket:socket.io-client:2.1.0") {
+        exclude(group = "org.json", module = "json")
+    }
+
+    // Hardware Location & OpenStreetMap Maps
+    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
 }

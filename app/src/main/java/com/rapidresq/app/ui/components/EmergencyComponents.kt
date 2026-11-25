@@ -23,14 +23,20 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 @Composable
-fun DemoModeBanner(text: String = "Phase 1 Prototype · Local Demo State") {
+fun DemoModeBanner(
+    isCloudConnected: Boolean = true,
+    text: String? = null
+) {
+    val bannerText = text ?: if (isCloudConnected) "Live Cloud Sync · Connected" else "Cloud Server Offline — Check Backend"
+    val bgColor = if (text != null) BrandNavy else if (isCloudConnected) BrandNavy else WarningAmber
+
     Surface(
-        color = BrandNavy,
+        color = bgColor,
         contentColor = Color.White,
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = text,
+            text = bannerText,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             modifier = Modifier

@@ -94,7 +94,22 @@ data class ResponseTeam(
     val unitType: String,
     val baseLocation: String,
     val isAvailable: Boolean,
-    val resolvedCount: Int
+    val resolvedCount: Int,
+    val lat: Double = 22.7196,
+    val lng: Double = 75.8577
+)
+
+data class RankedTeam(
+    val id: String,
+    val name: String,
+    val unitType: String,
+    val baseLocation: String,
+    val isAvailable: Boolean,
+    val resolvedCount: Int,
+    val distanceKm: Double? = null,
+    val isRecommended: Boolean = false,
+    val lat: Double = 22.7196,
+    val lng: Double = 75.8577
 )
 
 data class StaffAccount(
@@ -115,14 +130,19 @@ data class Incident(
     val description: String,
     val locationText: String,
     val gpsLabel: String? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
     val severity: IncidentSeverity,
     val reporterContact: String,
     val media: List<MediaAttachment>? = null,
     val status: IncidentStatus,
     val assignedTeamId: String? = null,
     val assignedTeamName: String? = null,
+    val assignedTeamLat: Double? = null,
+    val assignedTeamLng: Double? = null,
     val rejectionReason: String? = null,
     val createdAt: Long,
+    val possibleDuplicateOf: String? = null,
     val timeline: List<TimelineEntry> = emptyList(),
     val fieldNotes: List<FieldNote> = emptyList()
 )

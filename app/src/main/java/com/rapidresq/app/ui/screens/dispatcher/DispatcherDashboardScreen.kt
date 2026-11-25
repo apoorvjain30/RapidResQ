@@ -1,7 +1,10 @@
 package com.rapidresq.app.ui.screens.dispatcher
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,10 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.rapidresq.app.data.model.*
-import com.rapidresq.app.ui.components.CategoryIcon
-import com.rapidresq.app.ui.components.DemoModeBanner
-import com.rapidresq.app.ui.components.SeverityBadge
-import com.rapidresq.app.ui.components.StatusBadge
+import com.rapidresq.app.ui.components.*
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 import java.text.SimpleDateFormat
@@ -42,12 +42,41 @@ fun DispatcherDashboardScreen(
     val teams by viewModel.teams.collectAsState()
     val auditLogs by viewModel.auditLogs.collectAsState()
     val session by viewModel.currentSession.collectAsState()
+    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val pendingCount by viewModel.pendingCount.collectAsState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var selectedFilter by remember { mutableStateOf("All") }
 
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {}
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
-        DemoModeBanner()
+        DemoModeBanner(isCloudConnected = isCloudConnected)
+
+        if (!isOnline || pendingCount > 0) {
+            Surface(
+                color = WarningAmber,
+                contentColor = Color.White,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Offline Mode • $pendingCount action(s) queued locally",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp)
+                )
+            }
+        }
+
         TopAppBar(
             title = { Text("Dispatcher Command - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
@@ -81,59 +110,134 @@ fun DispatcherDashboardScreen(
             contentColor = BrandBlue
         ) {
             Tab(selected = selectedTabIndex == 0, onClick = { selectedTabIndex = 0 }, text = { Text("Incidents", fontWeight = FontWeight.Bold) })
-            Tab(selected = selectedTabIndex == 1, onClick = { selectedTabIndex = 1 }, text = { Text("Audit Log", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTabIndex == 1, onClick = { selectedTabIndex = 1 }, text = { Text("Live Map", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTabIndex == 2, onClick = { selectedTabIndex = 2 }, text = { Text("Audit Log", fontWeight = FontWeight.Bold) })
         }
 
-        if (selectedTabIndex == 0) {
-            // Incidents Tab
-            ScrollableTabRow(
-                selectedTabIndex = listOf("All", "Pending", "Verified", "Active", "Closed").indexOf(selectedFilter),
-                containerColor = LightBackground,
-                contentColor = BrandBlue,
-                edgePadding = 16.dp,
-                modifier = Modifier.padding(vertical = 8.dp),
-                indicator = {}
-            ) {
-                listOf("All", "Pending", "Verified", "Active", "Closed").forEach { filter ->
-                    val isSelected = selectedFilter == filter
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                        modifier = Modifier.padding(end = 8.dp),
-                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = BrandBlueLight, selectedLabelColor = BrandBlue)
+        when (selectedTabIndex) {
+            0 -> {
+                // Incidents Tab
+                ScrollableTabRow(
+                    selectedTabIndex = listOf("All", "Pending", "Verified", "Active", "Closed").indexOf(selectedFilter),
+                    containerColor = LightBackground,
+                    contentColor = BrandBlue,
+                    edgePadding = 16.dp,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    indicator = {}
+                ) {
+                    listOf("All", "Pending", "Verified", "Active", "Closed").forEach { filter ->
+                        val isSelected = selectedFilter == filter
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedFilter = filter },
+                            label = { Text(filter, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            modifier = Modifier.padding(end = 8.dp),
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = BrandBlueLight, selectedLabelColor = BrandBlue)
+                        )
+                    }
+                }
+
+                val filteredIncidents = incidents.filter {
+                    when (selectedFilter) {
+                        "Pending" -> it.status == IncidentStatus.REPORTED
+                        "Verified" -> it.status == IncidentStatus.VERIFIED
+                        "Active" -> it.status !in listOf(IncidentStatus.REPORTED, IncidentStatus.RESOLVED, IncidentStatus.REJECTED)
+                        "Closed" -> it.status in listOf(IncidentStatus.RESOLVED, IncidentStatus.REJECTED)
+                        else -> true
+                    }
+                }.sortedByDescending { it.createdAt }
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(filteredIncidents) { incident ->
+                        DispatcherIncidentCard(incident, teams, viewModel)
+                    }
+                }
+            }
+            1 -> {
+                // Live Map Tab
+                val mapPins = remember(incidents, teams) {
+                    val list = mutableListOf<MapPin>()
+                    incidents.filter { it.status !in listOf(IncidentStatus.RESOLVED, IncidentStatus.REJECTED) }.forEach { inc ->
+                        if (inc.lat != null && inc.lng != null) {
+                            list.add(
+                                MapPin(
+                                    id = inc.id,
+                                    title = "${inc.id} - ${inc.title}",
+                                    snippet = "${inc.category.label} (${inc.status})",
+                                    lat = inc.lat,
+                                    lng = inc.lng,
+                                    pinType = if (inc.severity == IncidentSeverity.CRITICAL) MapPinType.INCIDENT_CRITICAL else MapPinType.INCIDENT_NORMAL
+                                )
+                            )
+                        }
+                    }
+                    teams.forEach { team ->
+                        list.add(
+                            MapPin(
+                                id = team.id,
+                                title = team.name,
+                                snippet = "${team.unitType} (${if (team.isAvailable) "Available" else "On Duty"})",
+                                lat = team.lat,
+                                lng = team.lng,
+                                pinType = MapPinType.RESPONDER_UNIT
+                            )
+                        )
+                    }
+                    list
+                }
+
+                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        colors = CardDefaults.cardColors(containerColor = LightSurface),
+                        border = CardDefaults.outlinedCardBorder(true)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(EmergencyRed))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Critical Incident", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(WarningAmber))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Incident", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(BrandBlue))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Response Unit", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+
+                    RapidResQMapCard(
+                        pins = mapPins,
+                        centerLat = 22.7196,
+                        centerLng = 75.8577,
+                        zoom = 12.5,
+                        height = 420.dp
                     )
                 }
             }
-
-            val filteredIncidents = incidents.filter {
-                when (selectedFilter) {
-                    "Pending" -> it.status == IncidentStatus.REPORTED
-                    "Verified" -> it.status == IncidentStatus.VERIFIED
-                    "Active" -> it.status !in listOf(IncidentStatus.REPORTED, IncidentStatus.RESOLVED, IncidentStatus.REJECTED)
-                    "Closed" -> it.status in listOf(IncidentStatus.RESOLVED, IncidentStatus.REJECTED)
-                    else -> true
-                }
-            }.sortedByDescending { it.createdAt }
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(filteredIncidents) { incident ->
-                    DispatcherIncidentCard(incident, teams, viewModel)
-                }
-            }
-        } else {
-            // Audit Log Tab
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(auditLogs.sortedByDescending { it.timestamp }) { log ->
-                    AuditLogCard(log)
+            2 -> {
+                // Audit Log Tab
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(auditLogs.sortedByDescending { it.timestamp }) { log ->
+                        AuditLogCard(log)
+                    }
                 }
             }
         }
@@ -175,6 +279,23 @@ fun DispatcherIncidentCard(
                 Text(incident.id, style = MaterialTheme.typography.titleMedium, color = BrandBlue, fontWeight = FontWeight.ExtraBold)
                 StatusBadge(status = incident.status)
             }
+
+            if (incident.possibleDuplicateOf != null) {
+                Surface(
+                    color = WarningAmberBg,
+                    contentColor = WarningAmber,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(top = 8.dp)
+                ) {
+                    Text(
+                        text = "Possible duplicate of ${incident.possibleDuplicateOf}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CategoryIcon(category = incident.category, tint = SlateTextPrimary)
@@ -285,6 +406,14 @@ fun DispatcherIncidentCard(
     }
 
     if (showAssignDialog) {
+        LaunchedEffect(incident.id) {
+            viewModel.fetchRecommendedTeams(incident.id)
+        }
+        val recTeams by viewModel.recommendedTeams.collectAsState()
+        val displayTeams = if (recTeams.isNotEmpty()) recTeams else teams.map { 
+            RankedTeam(it.id, it.name, it.unitType, it.baseLocation, it.isAvailable, it.resolvedCount, null, it.unitType == incident.category.recommendedUnitType, it.lat, it.lng)
+        }
+
         AlertDialog(
             onDismissRequest = { showAssignDialog = false },
             title = { Text("Assign Response Unit") },
@@ -294,8 +423,8 @@ fun DispatcherIncidentCard(
                         Text("Recommended: ${incident.category.recommendedUnitType}", style = MaterialTheme.typography.labelMedium, color = InfoCyan)
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    items(teams) { team ->
-                        val isRecommended = team.unitType == incident.category.recommendedUnitType
+                    items(displayTeams) { team ->
+                        val isRecommended = team.isRecommended
                         val color = if (team.isAvailable) LightSurface else LightSurfaceVariant
                         Card(
                             onClick = {
@@ -310,7 +439,8 @@ fun DispatcherIncidentCard(
                             Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column {
                                     Text(team.name, fontWeight = FontWeight.Bold, color = if (team.isAvailable) SlateTextPrimary else SlateTextSecondary)
-                                    Text(team.unitType, style = MaterialTheme.typography.bodySmall, color = if (isRecommended) InfoCyan else SlateTextSecondary)
+                                    val distLabel = if (team.distanceKm != null) "${team.distanceKm} km • " else ""
+                                    Text("$distLabel${team.unitType}", style = MaterialTheme.typography.bodySmall, color = if (isRecommended) InfoCyan else SlateTextSecondary)
                                 }
                                 Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(6.dp)).background(if (team.isAvailable) SafeEmerald else EmergencyRed))
                             }

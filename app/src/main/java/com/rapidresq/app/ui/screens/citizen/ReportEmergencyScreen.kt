@@ -1,5 +1,6 @@
 package com.rapidresq.app.ui.screens.citizen
 
+import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
@@ -32,6 +34,9 @@ import com.rapidresq.app.data.model.EmergencyCategory
 import com.rapidresq.app.data.model.IncidentSeverity
 import com.rapidresq.app.data.model.MediaAttachment
 import com.rapidresq.app.ui.components.CategoryIcon
+import com.rapidresq.app.ui.components.MapPin
+import com.rapidresq.app.ui.components.MapPinType
+import com.rapidresq.app.ui.components.RapidResQMapCard
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
@@ -48,6 +53,8 @@ fun ReportEmergencyScreen(
     var selectedCategory by remember { mutableStateOf<EmergencyCategory?>(null) }
     var locationText by remember { mutableStateOf("") }
     var gpsLabel by remember { mutableStateOf<String?>(null) }
+    var selectedLat by remember { mutableStateOf<Double?>(null) }
+    var selectedLng by remember { mutableStateOf<Double?>(null) }
     var selectedSeverity by remember { mutableStateOf(IncidentSeverity.HIGH) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -61,6 +68,21 @@ fun ReportEmergencyScreen(
             val type = context.contentResolver.getType(it)
             val isVideo = type?.startsWith("video") == true
             attachedMedia = MediaAttachment(uri = it.toString(), isVideo = isVideo)
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.any { it }) {
+            viewModel.captureLiveGps { res ->
+                if (res != null) {
+                    selectedLat = res.lat
+                    selectedLng = res.lng
+                    locationText = res.displayAddress
+                    gpsLabel = String.format("%.4f° N, %.4f° E (Live GPS)", res.lat, res.lng)
+                }
+            }
         }
     }
 
@@ -142,17 +164,41 @@ fun ReportEmergencyScreen(
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        locationText = "Near Acropolis Campus, Manglia, Indore"
-                        gpsLabel = "22.8235° N, 75.9432° E (Demo GPS)"
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = LightSurfaceVariant, contentColor = BrandBlue)
-                ) {
-                    Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Use Demo GPS")
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Use Live GPS")
+                    }
+
+                    Button(
+                        onClick = {
+                            selectedLat = 22.8235
+                            selectedLng = 75.9432
+                            locationText = "Near Acropolis Campus, Manglia, Indore"
+                            gpsLabel = "22.8235° N, 75.9432° E (Demo GPS)"
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = LightSurfaceVariant, contentColor = BrandBlue),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Demo GPS")
+                    }
                 }
+
                 if (gpsLabel != null) {
                     Text(
                         text = "GPS: $gpsLabel",
@@ -161,6 +207,40 @@ fun ReportEmergencyScreen(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Map View Composable
+                val mapPins = remember(selectedLat, selectedLng) {
+                    if (selectedLat != null && selectedLng != null) {
+                        listOf(
+                            MapPin(
+                                id = "INCIDENT_PIN",
+                                title = "Incident Location",
+                                snippet = locationText.ifBlank { "Selected Pin" },
+                                lat = selectedLat!!,
+                                lng = selectedLng!!,
+                                pinType = MapPinType.SELECTED_LOCATION
+                            )
+                        )
+                    } else emptyList()
+                }
+
+                RapidResQMapCard(
+                    pins = mapPins,
+                    centerLat = selectedLat ?: 22.7196,
+                    centerLng = selectedLng ?: 75.8577,
+                    zoom = if (selectedLat != null) 15.0 else 12.5,
+                    height = 200.dp,
+                    onMapTap = { tapLat, tapLng ->
+                        selectedLat = tapLat
+                        selectedLng = tapLng
+                        gpsLabel = String.format("%.4f° N, %.4f° E (Map Pin)", tapLat, tapLng)
+                        if (locationText.isBlank()) {
+                            locationText = String.format("Pin at %.4f, %.4f", tapLat, tapLng)
+                        }
+                    }
+                )
             }
 
             // Severity
@@ -328,7 +408,9 @@ fun ReportEmergencyScreen(
                                 gpsLabel = gpsLabel,
                                 severity = selectedSeverity,
                                 reporterContact = reporterContact,
-                                media = attachedMedia?.let { listOf(it) }
+                                media = attachedMedia?.let { listOf(it) },
+                                lat = selectedLat,
+                                lng = selectedLng
                             )
                             if (id != null) {
                                 onReportSubmitted(id)

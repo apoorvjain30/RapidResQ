@@ -35,12 +35,30 @@ fun AdminDashboardScreen(
     val staffAccounts by viewModel.staffAccounts.collectAsState()
     val auditLogs by viewModel.auditLogs.collectAsState()
     val session by viewModel.currentSession.collectAsState()
+    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val pendingCount by viewModel.pendingCount.collectAsState()
 
     var selectedTabIndex by remember { mutableStateOf(0) }
     var showAddUnitDialog by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
-        DemoModeBanner()
+        DemoModeBanner(isCloudConnected = isCloudConnected)
+
+        if (!isOnline || pendingCount > 0) {
+            Surface(
+                color = WarningAmber,
+                contentColor = Color.White,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Offline Mode • $pendingCount action(s) queued locally",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp)
+                )
+            }
+        }
         TopAppBar(
             title = { Text("Admin Governance - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
             navigationIcon = {
