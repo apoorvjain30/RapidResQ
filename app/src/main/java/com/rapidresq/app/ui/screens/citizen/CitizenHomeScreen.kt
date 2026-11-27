@@ -5,25 +5,30 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rapidresq.app.data.model.Incident
 import com.rapidresq.app.ui.components.AiAssistantSheet
 import com.rapidresq.app.ui.components.CategoryIcon
+import com.rapidresq.app.ui.components.RapidResQCommandTopBar
+import com.rapidresq.app.ui.components.SemanticStatusPill
 import com.rapidresq.app.ui.components.SeverityBadge
 import com.rapidresq.app.ui.components.StatusBadge
+import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
@@ -39,37 +44,27 @@ fun CitizenHomeScreen(
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val session by viewModel.currentSession.collectAsState()
+    val isCloudConnected by viewModel.isCloudConnected.collectAsState()
+    
     var trackId by remember { mutableStateOf("") }
     var showAiSheet by remember { mutableStateOf(false) }
     
-    val titleText = if (session?.isGuest == true) "Guest SOS Mode" else "Citizen Portal - ${session?.name ?: ""}"
+    val titleText = if (session?.isGuest == true) "Guest SOS Mode" else "Citizen Portal"
+    val subtitleText = if (session?.isGuest == true) "No account tracking" else session?.name ?: ""
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = CanvasBg,
         topBar = {
-            TopAppBar(
-                title = { Text(titleText, fontWeight = FontWeight.Bold, color = BrandNavy) },
-                navigationIcon = {
-                    IconButton(onClick = onBackToRoles) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.logout(); onLogout() }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            RapidResQCommandTopBar(
+                title = titleText,
+                subtitle = subtitleText,
+                isCloudConnected = isCloudConnected,
+                showBack = true,
+                onBack = onBackToRoles,
+                onAiClick = { showAiSheet = true },
+                onLogoutClick = { viewModel.logout(); onLogout() }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAiSheet = true },
-                containerColor = BrandBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
-            }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -79,34 +74,52 @@ fun CitizenHomeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // SOS Card
+            // Crimson Emergency Hero Card
             item {
                 Card(
                     onClick = onReportClick,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = EmergencyRed),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    shape = RoundedCornerShape(22.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(24.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                            .background(Brush.verticalGradient(listOf(EmergencyRed, Color(0xFFB91C1C))))
+                            .padding(24.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(36.dp)
-                        )
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            text = "Report an Emergency",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Report an Emergency",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Share GPS, category & photo/video in seconds",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            Surface(
+                                color = Color.White,
+                                contentColor = EmergencyRed,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("Report Now", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -115,15 +128,16 @@ fun CitizenHomeScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = LightSurface),
-                    border = CardDefaults.outlinedCardBorder(true)
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                    border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(modifier = Modifier.padding(20.dp)) {
                         Text(
                             text = "Track Existing Incident",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SlateTextPrimary
+                            color = TextPrimary
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -133,21 +147,15 @@ fun CitizenHomeScreen(
                                 placeholder = { Text("RRQ-XXXXXX") },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = BrandBlue,
-                                    unfocusedBorderColor = SubtleBorder,
-                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    cursorColor = MaterialTheme.colorScheme.primary
-                                )
+                                colors = rapidResQTextFieldColors(),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Button(
                                 onClick = { if (trackId.isNotBlank()) onTrackIncident(trackId) },
                                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
-                                modifier = Modifier.height(56.dp)
+                                modifier = Modifier.height(56.dp),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                             ) {
                                 Text("Track")
                             }
@@ -159,10 +167,10 @@ fun CitizenHomeScreen(
             item {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Active & Recent Demo Incidents",
+                    text = "Active & Recent Incidents",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
+                    color = TextPrimary
                 )
             }
 
@@ -175,7 +183,7 @@ fun CitizenHomeScreen(
             }
             
             item {
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(96.dp))
             }
         }
     }
@@ -196,8 +204,9 @@ private fun IncidentSummaryCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = LightSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+        border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -218,12 +227,12 @@ private fun IncidentSummaryCard(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    shape = MaterialTheme.shapes.small,
+                    shape = CircleShape,
                     color = LightSurfaceVariant,
                     modifier = Modifier.size(40.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        CategoryIcon(category = incident.category, tint = SlateTextPrimary)
+                        CategoryIcon(category = incident.category, tint = TextPrimary)
                     }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -231,13 +240,13 @@ private fun IncidentSummaryCard(
                     Text(
                         text = incident.title,
                         style = MaterialTheme.typography.titleMedium,
-                        color = SlateTextPrimary,
+                        color = TextPrimary,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = incident.locationText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = SlateTextSecondary
+                        color = TextSecondary
                     )
                 }
             }

@@ -1,10 +1,11 @@
 package com.rapidresq.app.ui.components
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -14,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,7 +70,7 @@ fun AiAssistantSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = LightSurface,
+        containerColor = SurfaceCard,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
@@ -86,25 +86,29 @@ fun AiAssistantSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = BrandBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("RapidResQ AI Assistant", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = BrandNavy)
+                    Surface(color = AiIndigoSoft, shape = RoundedCornerShape(8.dp), modifier = Modifier.size(32.dp)) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AiIndigo, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("RapidResQ AI Assistant", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
                 }
                 IconButton(onClick = { viewModel.clearAiChat() }) {
-                    Icon(Icons.Default.DeleteSweep, contentDescription = "Clear Chat", tint = SlateTextSecondary)
+                    Icon(Icons.Default.DeleteSweep, contentDescription = "Clear Chat", tint = TextSecondary)
                 }
             }
 
             // Scope Badge
             Surface(
-                color = BrandBlueLight,
+                color = AiIndigoSoft,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             ) {
                 Text(
                     text = "🔒 $scopeLabel",
                     style = MaterialTheme.typography.labelSmall,
-                    color = BrandBlue,
+                    color = AiIndigo,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
@@ -112,7 +116,7 @@ fun AiAssistantSheet(
 
             // Suggestion Chips
             if (chatMessages.isEmpty()) {
-                Text("Suggested Queries:", style = MaterialTheme.typography.labelMedium, color = SlateTextSecondary, modifier = Modifier.padding(bottom = 6.dp))
+                Text("Suggested Queries:", style = MaterialTheme.typography.labelMedium, color = TextSecondary, modifier = Modifier.padding(bottom = 6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -145,7 +149,7 @@ fun AiAssistantSheet(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Ask me anything about your dispatches, safety steps, or telemetry.", color = SlateTextSecondary, style = MaterialTheme.typography.bodyMedium)
+                            Text("Ask me anything about your dispatches, safety steps, or telemetry.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
@@ -153,13 +157,14 @@ fun AiAssistantSheet(
                 items(chatMessages) { msg ->
                     val isUser = msg.isUser
                     val bg = if (isUser) BrandBlue else LightSurfaceVariant
-                    val textColor = if (isUser) Color.White else SlateTextPrimary
+                    val textColor = if (isUser) Color.White else TextPrimary
                     val align = if (isUser) Alignment.End else Alignment.Start
 
                     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = align) {
                         Surface(
                             color = bg,
                             shape = RoundedCornerShape(12.dp),
+                            border = if (!isUser) BorderStroke(1.dp, CardBorder) else null,
                             modifier = Modifier.fillMaxWidth(0.85f)
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
@@ -172,7 +177,7 @@ fun AiAssistantSheet(
                                 Text(
                                     text = msg.timestamp,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (isUser) Color.White.copy(alpha = 0.7f) else SlateTextSecondary,
+                                    color = if (isUser) Color.White.copy(alpha = 0.7f) else TextSecondary,
                                     modifier = Modifier.align(Alignment.End)
                                 )
                             }
@@ -183,9 +188,9 @@ fun AiAssistantSheet(
                 if (isAiThinking) {
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = BrandBlue)
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = AiIndigo)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Gemini is analyzing context...", style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
+                            Text("Gemini is analyzing context...", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                         }
                     }
                 }
@@ -205,15 +210,7 @@ fun AiAssistantSheet(
                     placeholder = { Text("Ask RapidResQ AI...") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BrandBlue,
-                        unfocusedBorderColor = SubtleBorder,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary
-                    )
+                    colors = rapidResQTextFieldColors()
                 )
 
                 FloatingActionButton(
@@ -225,7 +222,8 @@ fun AiAssistantSheet(
                     },
                     containerColor = BrandBlue,
                     contentColor = Color.White,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", modifier = Modifier.size(20.dp))
                 }
