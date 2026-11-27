@@ -4,23 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
@@ -29,8 +28,7 @@ import com.rapidresq.app.viewmodel.RapidResQViewModel
 fun RegisterCitizenScreen(
     viewModel: RapidResQViewModel,
     onBack: () -> Unit,
-    onProceedToOtp: (String) -> Unit,
-    onGuestSosClick: () -> Unit,
+    onRequireOtp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var name by remember { mutableStateOf("") }
@@ -39,17 +37,32 @@ fun RegisterCitizenScreen(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
-    var registerErrorMsg by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val isActionInProgress by viewModel.isActionInProgress.collectAsState()
 
-    val isPasswordValid = password.length >= 8 && password.any { it.isUpperCase() } && password.any { it.isLowerCase() } && password.any { it.isDigit() }
-    val isFormValid = name.isNotBlank() && email.contains("@") && phone.length == 10 && isPasswordValid && password == confirmPassword
+    val passHasUpper = password.any { it.isUpperCase() }
+    val passHasLower = password.any { it.isLowerCase() }
+    val passHasDigit = password.any { it.isDigit() }
+    val passHasLength = password.length >= 8
+    val passMatches = password.isNotEmpty() && password == confirmPassword
+    val isFormValid = name.isNotBlank() && email.isNotBlank() && phone.isNotBlank() && passHasUpper && passHasLower && passHasDigit && passHasLength && passMatches
+
+    fun attemptRegister() {
+        if (!isFormValid) return
+        errorMessage = null
+        val result = viewModel.registerCitizen(name, email, phone, password)
+        if (result.isSuccess) {
+            onRequireOtp()
+        } else {
+            errorMessage = result.exceptionOrNull()?.message ?: "Registration failed"
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(LightBackground)
+            .background(CanvasBg)
     ) {
         TopAppBar(
             title = { Text("Create Citizen Account", fontWeight = FontWeight.Bold, color = BrandNavy) },
@@ -58,7 +71,7 @@ fun RegisterCitizenScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceCard)
         )
 
         Column(
@@ -66,159 +79,130 @@ fun RegisterCitizenScreen(
                 .fillMaxSize()
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Surface(
-                color = InfoCyanBg,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "Citizen accounts are optional (save incident history & receive alerts). Guest SOS is always available without signing up.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = InfoCyan,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Full Name") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                colors = defaultTextFieldColors()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it; registerErrorMsg = null },
-                label = { Text("Email Address") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                colors = defaultTextFieldColors()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = phone,
-                onValueChange = { if (it.length <= 10) phone = it.filter { char -> char.isDigit() } },
-                label = { Text("Phone Number (10 digits)") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                colors = defaultTextFieldColors()
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null)
-                    }
-                },
-                colors = defaultTextFieldColors()
-            )
-            
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
-                PasswordRuleItem("8+ characters", password.length >= 8)
-                PasswordRuleItem("Uppercase & lowercase", password.any { it.isUpperCase() } && password.any { it.isLowerCase() })
-                PasswordRuleItem("At least one number", password.any { it.isDigit() })
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it },
-                label = { Text("Confirm Password") },
-                modifier = Modifier.fillMaxWidth(),
-                visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                trailingIcon = {
-                    IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                        Icon(if (confirmPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null)
-                    }
-                },
-                isError = confirmPassword.isNotEmpty() && password != confirmPassword,
-                colors = defaultTextFieldColors()
-            )
-
-            if (registerErrorMsg != null) {
-                Surface(color = EmergencyRedBg, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                    Text(registerErrorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+            if (errorMessage != null) {
+                Surface(color = EmergencyRedSoft, contentColor = EmergencyRed, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text(errorMessage!!, modifier = Modifier.padding(12.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Personal Info", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Full Name") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = TextMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; errorMessage = null },
+                        label = { Text("Email Address") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = TextMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+                    OutlinedTextField(
+                        value = phone,
+                        onValueChange = { phone = it },
+                        label = { Text("Mobile Number") },
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = TextMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+                }
+            }
 
-            Button(
-                onClick = {
-                    if (isFormValid) {
-                        val result = viewModel.registerCitizen(name, email, phone, password)
-                        if (result.isSuccess) {
-                            onProceedToOtp(email)
-                        } else {
-                            registerErrorMsg = result.exceptionOrNull()?.message
-                        }
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Security", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = TextMuted) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null, tint = TextMuted)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(horizontal = 12.dp)) {
+                        ReqRow("8+ characters", passHasLength)
+                        ReqRow("Uppercase letter", passHasUpper)
+                        ReqRow("Lowercase letter", passHasLower)
+                        ReqRow("Number", passHasDigit)
                     }
-                },
-                enabled = isFormValid,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
-            ) {
-                Text("Create Account & Verify OTP", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it },
+                        label = { Text("Confirm Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = TextMuted) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedButton(
-                onClick = onGuestSosClick,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = SlateTextSecondary)
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = { attemptRegister() },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                enabled = isFormValid && !isActionInProgress,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
+                shape = RoundedCornerShape(14.dp)
             ) {
-                Text("Skip — Use Guest SOS", fontWeight = FontWeight.Bold)
+                if (isActionInProgress) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text("Create Account", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
 
 @Composable
-fun PasswordRuleItem(text: String, isMet: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+private fun ReqRow(label: String, met: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            imageVector = Icons.Default.CheckCircle,
+            if (met) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
             contentDescription = null,
-            tint = if (isMet) SafeEmerald else SubtleBorder,
-            modifier = Modifier.size(16.dp)
+            tint = if (met) EmeraldGreen else TextMuted,
+            modifier = Modifier.size(14.dp)
         )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = if (isMet) SafeEmerald else SlateTextSecondary)
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(label, color = if (met) TextPrimary else TextMuted, fontSize = 12.sp)
     }
 }
-
-@Composable
-fun defaultTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = BrandBlue,
-    unfocusedBorderColor = SubtleBorder,
-    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-    focusedLabelColor = MaterialTheme.colorScheme.primary,
-    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-    cursorColor = MaterialTheme.colorScheme.primary
-)

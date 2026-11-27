@@ -1,248 +1,250 @@
 package com.rapidresq.app.ui.screens.auth
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rapidresq.app.data.model.UserRole
-import com.rapidresq.app.ui.components.DemoModeBanner
+import com.rapidresq.app.ui.components.RapidResQLogoMark
+import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
 @Composable
 fun LoginScreen(
     viewModel: RapidResQViewModel,
-    onGuestSosClick: () -> Unit,
-    onRequireOtp: (UserRole, String) -> Unit,
-    onCitizenSignedIn: () -> Unit,
-    onRegisterClick: () -> Unit,
-    onForgotPasswordClick: () -> Unit,
-    onOpenRoleSwitcher: () -> Unit,
+    onLoginSuccess: (UserRole) -> Unit,
+    onRequireOtp: () -> Unit,
+    onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPass: () -> Unit,
+    onGuestSos: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showDemoAccounts by remember { mutableStateOf(false) }
 
-    var emailError by remember { mutableStateOf(false) }
-    var passwordError by remember { mutableStateOf(false) }
-    var loginErrorMsg by remember { mutableStateOf<String?>(null) }
+    val isActionInProgress by viewModel.isActionInProgress.collectAsState()
 
-    fun validateAndProceed() {
-        emailError = email.isBlank() || !email.contains("@")
-        passwordError = password.length < 6
-        loginErrorMsg = null
-
-        if (!emailError && !passwordError) {
-            val result = viewModel.loginWithPassword(email, password)
-            if (result.isSuccess) {
-                val (session, role) = result.getOrNull()!!
-                if (session != null) {
-                    onCitizenSignedIn()
-                } else {
-                    onRequireOtp(role, email)
-                }
+    fun attemptLogin() {
+        if (email.isBlank() || password.isBlank()) {
+            errorMessage = "Please enter email and password"
+            return
+        }
+        errorMessage = null
+        val result = viewModel.loginWithPassword(email, password)
+        if (result.isSuccess) {
+            val sessionPair = result.getOrNull()!!
+            if (sessionPair.first == null) {
+                onRequireOtp()
             } else {
-                loginErrorMsg = result.exceptionOrNull()?.message
+                onLoginSuccess(sessionPair.second)
             }
+        } else {
+            errorMessage = result.exceptionOrNull()?.message ?: "Authentication failed"
         }
     }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(LightBackground)
+            .background(CanvasBg)
+            .verticalScroll(rememberScrollState())
     ) {
-        DemoModeBanner(text = "Phase 2 Auth UI · Real JWT/OTP Verification in Phase 3")
-
-        Column(
+        // Premium Navy Header
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                .background(Brush.verticalGradient(listOf(BrandNavy, BrandNavyLight)))
+                .statusBarsPadding()
+                .padding(bottom = 32.dp, top = 24.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RapidResQLogoMark(44.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("RapidResQ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                Text("Secure Emergency Coordination", color = InputBorder, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+
+        Column(modifier = Modifier.padding(16.dp)) {
             // Guest SOS Card
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = EmergencyRedBg),
-                border = CardDefaults.outlinedCardBorder(true).copy(brush = SolidColor(EmergencyRed))
+                onClick = {
+                    viewModel.enterGuestSos()
+                    onGuestSos()
+                },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(containerColor = EmergencyRedSoft),
+                border = CardDefaults.outlinedCardBorder(true).copy(brush = SolidColor(EmergencyRedBorder)),
+                shape = RoundedCornerShape(18.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Need Immediate Help?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = EmergencyRed
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onGuestSosClick,
-                        colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed),
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    ) {
-                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(color = EmergencyRed, shape = RoundedCornerShape(12.dp), modifier = Modifier.size(24.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.PriorityHigh, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                            }
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Guest Emergency SOS (No Login)", color = Color.White, fontWeight = FontWeight.Bold)
+                        Column {
+                            Text("Need Immediate Help?", fontWeight = FontWeight.Bold, color = EmergencyRed, fontSize = 16.sp)
+                            Text("Report an emergency without signing in", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            viewModel.enterGuestSos()
+                            onGuestSos()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = EmergencyRed),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Guest Emergency SOS", fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Visible)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Demo Accounts Helpers
-            Surface(
-                color = InfoCyanBg,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Demo Test Accounts", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = InfoCyan)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        AssistChip(onClick = { email = "admin@rapidresq.in"; password = "Admin@123" }, label = { Text("Admin") })
-                        AssistChip(onClick = { email = "dispatch@rapidresq.in"; password = "Dispatch@123" }, label = { Text("Dispatch") })
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        AssistChip(onClick = { email = "bravo@rapidresq.in"; password = "Unit@123" }, label = { Text("Unit Bravo") })
-                        AssistChip(onClick = { email = "citizen@rapidresq.in"; password = "Citizen@123" }, label = { Text("Citizen") })
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Login Card
+            // Sign In Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = LightSurface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
+                shape = RoundedCornerShape(20.dp)
             ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    
-                    Text("Sign In", style = MaterialTheme.typography.headlineSmall, color = BrandNavy, fontWeight = FontWeight.ExtraBold)
-                    Spacer(modifier = Modifier.height(24.dp))
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text("Account Sign In", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Staff accounts require 2-step OTP", fontSize = 13.sp, color = TextMuted)
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    OutlinedTextField(
-                        value = email,
-                        onValueChange = { 
-                            email = it
-                            emailError = false
-                            loginErrorMsg = null
-                        },
-                        label = { Text("Email Address") },
-                        isError = emailError,
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandBlue,
-                            unfocusedBorderColor = SubtleBorder,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    if (emailError) {
-                        Text("Please enter a valid email", color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { 
-                            password = it
-                            passwordError = false
-                            loginErrorMsg = null
-                        },
-                        label = { Text("Password") },
-                        isError = passwordError,
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = "Toggle password visibility")
-                            }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandBlue,
-                            unfocusedBorderColor = SubtleBorder,
-                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-                    if (passwordError) {
-                        Text("Password must be at least 6 characters", color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
-                    }
-
-                    if (loginErrorMsg != null) {
-                        Surface(color = EmergencyRedBg, shape = RoundedCornerShape(4.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                            Text(loginErrorMsg!!, color = EmergencyRed, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
+                    if (errorMessage != null) {
+                        Surface(color = EmergencyRedSoft, contentColor = EmergencyRed, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                            Text(errorMessage!!, modifier = Modifier.padding(12.dp), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it; errorMessage = null },
+                        label = { Text("Email Address") },
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = TextMuted) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it; errorMessage = null },
+                        label = { Text("Password") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = TextMuted) },
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                Icon(if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff, contentDescription = null, tint = TextMuted)
+                            }
+                        },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = rapidResQTextFieldColors()
+                    )
 
-                    TextButton(
-                        onClick = onForgotPasswordClick,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Forgot Password?", color = BrandBlue)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onNavigateToForgotPass) {
+                            Text("Forgot Password?", color = BrandBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     Button(
-                        onClick = { validateAndProceed() },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
+                        onClick = { attemptLogin() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        enabled = !isActionInProgress,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text("Sign In", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        if (isActionInProgress) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text("Sign In", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            TextButton(onClick = onRegisterClick) {
-                Text("New Citizen? Create Optional Account", color = SlateTextPrimary, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(24.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                TextButton(onClick = onNavigateToRegister) {
+                    Text("New citizen? Create Optional Account", color = BrandBlue, fontWeight = FontWeight.SemiBold)
+                }
             }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            TextButton(onClick = onOpenRoleSwitcher) {
-                Text("Quick Demo Role Switcher (Phase 1 Style)", color = SlateTextSecondary)
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
         }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Demo Footer
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = if (showDemoAccounts) "Quick Fill Test Credentials ▴" else "Quick Fill Test Credentials ▾",
+                color = TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { showDemoAccounts = !showDemoAccounts }.padding(8.dp)
+            )
+            
+            AnimatedVisibility(visible = showDemoAccounts) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DemoChip("Admin") { email = "admin@rapidresq.in"; password = "Admin@123" }
+                        DemoChip("Dispatcher") { email = "dispatch@rapidresq.in"; password = "Dispatch@123" }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DemoChip("Unit Alpha") { email = "alpha@rapidresq.in"; password = "Unit@123" }
+                        DemoChip("Unit Bravo") { email = "bravo@rapidresq.in"; password = "Unit@123" }
+                        DemoChip("Citizen") { email = "citizen@rapidresq.in"; password = "Citizen@123" }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun DemoChip(label: String, onClick: () -> Unit) {
+    Surface(
+        color = LightSurfaceVariant,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.clickable(onClick = onClick)
+    ) {
+        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }

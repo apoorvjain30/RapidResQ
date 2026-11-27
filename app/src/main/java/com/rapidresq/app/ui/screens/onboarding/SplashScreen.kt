@@ -1,88 +1,97 @@
 package com.rapidresq.app.ui.screens.onboarding
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.rapidresq.app.ui.components.RapidResQLogoMark
 import com.rapidresq.app.ui.theme.BrandNavy
-import com.rapidresq.app.ui.theme.EmergencyRed
 import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
-    onFinished: () -> Unit,
+    onSplashComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isVisible by remember { mutableStateOf(false) }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0.8f,
+        animationSpec = tween(durationMillis = 800),
+        label = "logo_scale"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 800),
+        label = "logo_alpha"
+    )
+
     LaunchedEffect(Unit) {
+        isVisible = true
         delay(1300)
-        onFinished()
+        onSplashComplete()
     }
+
+    val backgroundBrush = Brush.radialGradient(
+        colors = listOf(
+            Color(0xFF1E3A8A), // Subtle inner glow
+            BrandNavy
+        ),
+        radius = 800f
+    )
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BrandNavy),
+            .background(backgroundBrush),
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .scale(scale)
+                .alpha(alpha)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.White,
-                modifier = Modifier.size(80.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = "RapidResQ Logo",
-                        tint = EmergencyRed,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
+            RapidResQLogoMark(88.dp)
             Spacer(modifier = Modifier.height(24.dp))
-
             Text(
                 text = "RapidResQ",
-                style = MaterialTheme.typography.displayMedium,
                 color = Color.White,
-                fontWeight = FontWeight.ExtraBold
+                fontSize = 32.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.sp
             )
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Text(
-                text = "Report. Respond. Resolve. In Real Time.",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.8f),
+                text = "Report. Respond. Resolve.",
+                color = Color(0xFFCBD5E1),
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
         }
-
-        Surface(
-            color = Color.White.copy(alpha = 0.1f),
-            contentColor = Color.White,
-            shape = MaterialTheme.shapes.small,
+        
+        Text(
+            text = "EMERGENCY COORDINATION PLATFORM",
+            color = Color(0xFF94A3B8),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.5.sp,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 32.dp)
-        ) {
-            Text(
-                text = "Emergency Coordination Platform · Phase 2",
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-            )
-        }
+                .alpha(alpha)
+        )
     }
 }

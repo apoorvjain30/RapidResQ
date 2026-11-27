@@ -66,7 +66,7 @@ fun RapidResQNavGraph() {
         ) {
             composable("splash") {
                 SplashScreen(
-                    onFinished = {
+                    onSplashComplete = {
                         if (currentSession != null && currentSession?.isGuest == false) {
                             val dest = when (currentSession?.role) {
                                 UserRole.CITIZEN -> "citizen_home"
@@ -89,7 +89,7 @@ fun RapidResQNavGraph() {
                             popUpTo("onboarding") { inclusive = true }
                         }
                     },
-                    onGuestSosClick = {
+                    onGuestSos = {
                         viewModel.enterGuestSos()
                         navController.navigate("citizen_home")
                     }
@@ -98,55 +98,43 @@ fun RapidResQNavGraph() {
             composable("login") {
                 LoginScreen(
                     viewModel = viewModel,
-                    onGuestSosClick = {
-                        viewModel.enterGuestSos()
+                    onGuestSos = {
                         navController.navigate("citizen_home")
                     },
-                    onRequireOtp = { role, email -> 
-                        val encodedEmail = email.replace(".", "%2E") // simple encoding for demo
-                        navController.navigate("otp_verify/${role.name}/$encodedEmail")
+                    onRequireOtp = {
+                        navController.navigate("otp_verify")
                     },
-                    onCitizenSignedIn = { navController.navigate("citizen_home") { popUpTo("login") { inclusive = true } } },
-                    onRegisterClick = { navController.navigate("register_citizen") },
-                    onForgotPasswordClick = { navController.navigate("forgot_password") },
-                    onOpenRoleSwitcher = { navController.navigate("role_entry") }
+                    onLoginSuccess = { role -> 
+                        when (role) {
+                            UserRole.CITIZEN -> navController.navigate("citizen_home") { popUpTo("login") { inclusive = true } }
+                            UserRole.DISPATCHER -> navController.navigate("dispatcher_dashboard") { popUpTo("login") { inclusive = true } }
+                            UserRole.RESPONDER -> navController.navigate("responder_dashboard") { popUpTo("login") { inclusive = true } }
+                            UserRole.ADMIN -> navController.navigate("admin_dashboard") { popUpTo("login") { inclusive = true } }
+                        }
+                    },
+                    onNavigateToRegister = { navController.navigate("register_citizen") },
+                    onNavigateToForgotPass = { navController.navigate("forgot_password") }
                 )
             }
             composable("register_citizen") {
                 RegisterCitizenScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
-                    onProceedToOtp = { email -> 
-                        val encodedEmail = email.replace(".", "%2E")
-                        navController.navigate("otp_verify/${UserRole.CITIZEN.name}/$encodedEmail")
-                    },
-                    onGuestSosClick = { 
-                        viewModel.enterGuestSos()
-                        navController.navigate("citizen_home")
+                    onRequireOtp = { 
+                        navController.navigate("otp_verify")
                     }
                 )
             }
-            composable(
-                route = "otp_verify/{roleName}/{email}",
-                arguments = listOf(
-                    navArgument("roleName") { type = NavType.StringType },
-                    navArgument("email") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val roleName = backStackEntry.arguments?.getString("roleName") ?: ""
-                val email = backStackEntry.arguments?.getString("email")?.replace("%2E", ".") ?: ""
-                
+            composable("otp_verify") {
                 OtpVerificationScreen(
                     viewModel = viewModel,
-                    roleName = roleName,
-                    email = email,
                     onVerified = {
-                        val destination = when (roleName) {
-                            UserRole.CITIZEN.name -> "citizen_home"
-                            UserRole.DISPATCHER.name -> "dispatcher_dashboard"
-                            UserRole.RESPONDER.name -> "responder_dashboard"
-                            UserRole.ADMIN.name -> "admin_dashboard"
-                            else -> "role_entry"
+                        val role = viewModel.currentSession.value?.role ?: UserRole.CITIZEN
+                        val destination = when (role) {
+                            UserRole.CITIZEN -> "citizen_home"
+                            UserRole.DISPATCHER -> "dispatcher_dashboard"
+                            UserRole.RESPONDER -> "responder_dashboard"
+                            UserRole.ADMIN -> "admin_dashboard"
                         }
                         navController.navigate(destination) {
                             popUpTo("login") { inclusive = true }
@@ -159,7 +147,7 @@ fun RapidResQNavGraph() {
                 ForgotPasswordScreen(
                     viewModel = viewModel,
                     onBack = { navController.popBackStack() },
-                    onBackToLogin = { 
+                    onResetComplete = { 
                         navController.navigate("login") {
                             popUpTo("login") { inclusive = true }
                         }

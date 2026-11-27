@@ -2,31 +2,48 @@ package com.rapidresq.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Brand & Navigation
-val BrandNavy = Color(0xFF0F172A)        // Command-grade deep slate navy
-val BrandBlue = Color(0xFF1D4ED8)        // Trustworthy primary action blue
-val BrandBlueLight = Color(0xFFDBEAFE)
+// Premium Design System (Precision Command)
+val CanvasBg = Color(0xFFF4F6FA)         // Cool light slate canvas
+val SurfaceCard = Color(0xFFFFFFFF)      // Crisp white cards
+val CardBorder = Color(0xFFE2E8F0)       // Structural borders
+val InputBorder = Color(0xFFCBD5E1)      // Form borders
 
-// Emergency Severity & Status Colors (High-contrast for stress readability)
-val EmergencyRed = Color(0xFFDC2626)     // Critical / SOS / Fire
-val EmergencyRedBg = Color(0xFFFEE2E2)
+val BrandNavy = Color(0xFF0F172A)        // Deep slate navy command bar
+val BrandNavyLight = Color(0xFF1E293B)   // Secondary slate accents
+val BrandBlue = Color(0xFF1D4ED8)        // Primary actions (Cobalt)
+val BrandBlueLight = Color(0xFFDBEAFE)   // Soft active states
 
-val WarningAmber = Color(0xFFD97706)     // High severity / En Route / Pending
-val WarningAmberBg = Color(0xFFFEF3C7)
+val EmergencyRed = Color(0xFFDC2626)     // Critical / SOS
+val EmergencyRedSoft = Color(0xFFFEF2F2)
+val EmergencyRedBorder = Color(0xFFFECACA)
 
-val InfoCyan = Color(0xFF0284C7)         // Medium / Verified / Assigned
-val InfoCyanBg = Color(0xFFE0F2FE)
+val EmeraldGreen = Color(0xFF059669)     // Resolved / Success / Verified
+val EmeraldSoft = Color(0xFFECFDF5)
 
-val SafeEmerald = Color(0xFF059669)      // Resolved / Team Available
-val SafeEmeraldBg = Color(0xFFD1FAE5)
+val AmberWarn = Color(0xFFD97706)        // Pending / En Route
+val AmberSoft = Color(0xFFFFFBEB)
 
-// Surfaces & Text
-val LightBackground = Color(0xFFF8FAFC)
-val LightSurface = Color(0xFFFFFFFF)
+val AiIndigo = Color(0xFF4F46E5)         // AI Features
+val AiIndigoSoft = Color(0xFFEEF2FF)
+
+val TextPrimary = Color(0xFF0F172A)      // High contrast readable text
+val TextSecondary = Color(0xFF475569)    // Supporting body text
+val TextMuted = Color(0xFF64748B)        // Placeholders and meta
+
+// Legacy Mappings for Compatibility (Do not remove)
+val EmergencyRedBg = EmergencyRedSoft
+val WarningAmber = AmberWarn
+val WarningAmberBg = AmberSoft
+val InfoCyan = BrandBlue                 // Migrated to Cobalt
+val InfoCyanBg = BrandBlueLight
+val SafeEmerald = EmeraldGreen
+val SafeEmeraldBg = EmeraldSoft
+val LightBackground = CanvasBg
+val LightSurface = SurfaceCard
 val LightSurfaceVariant = Color(0xFFF1F5F9)
-val SlateTextPrimary = Color(0xFF0F172A)
-val SlateTextSecondary = Color(0xFF475569)
-val SubtleBorder = Color(0xFFE2E8F0)
+val SlateTextPrimary = TextPrimary
+val SlateTextSecondary = TextSecondary
+val SubtleBorder = CardBorder
 
 val DarkBackground = Color(0xFF0B1120)
 val DarkSurface = Color(0xFF1E293B)

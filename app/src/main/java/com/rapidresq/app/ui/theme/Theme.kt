@@ -18,13 +18,13 @@ private val LightColors = lightColorScheme(
     onError = Color.White,
     errorContainer = EmergencyRedBg,
     onErrorContainer = EmergencyRed,
-    background = LightBackground,
-    onBackground = SlateTextPrimary,
-    surface = LightSurface,
-    onSurface = SlateTextPrimary,
+    background = CanvasBg,
+    onBackground = TextPrimary,
+    surface = SurfaceCard,
+    onSurface = TextPrimary,
     surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = SlateTextSecondary,
-    outline = SubtleBorder
+    onSurfaceVariant = TextSecondary,
+    outline = CardBorder
 )
 
 private val DarkColors = darkColorScheme(
@@ -51,13 +51,15 @@ private val DarkColors = darkColorScheme(
  * RapidResQ Material 3 theme.
  * Dynamic wallpaper colors are intentionally disabled so emergency colors
  * (Red = Critical, Amber = High, Green = Resolved) remain consistent on every device.
+ * For Pass 2, we enforce Light theme for high-contrast visibility.
  */
 @Composable
 fun RapidResQTheme(
     darkTheme: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
+    // Enforcing light scheme for now to guarantee maximum contrast in field ops
+    val colorScheme = LightColors
 
     MaterialTheme(
         colorScheme = colorScheme,
