@@ -39,6 +39,7 @@ import com.rapidresq.app.ui.components.MapPinType
 import com.rapidresq.app.ui.components.RapidResQMapCard
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +50,7 @@ fun ReportEmergencyScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isSubmitting by viewModel.isSubmittingReport.collectAsState()
     
     var selectedCategory by remember { mutableStateOf<EmergencyCategory?>(null) }
     var locationText by remember { mutableStateOf("") }
@@ -80,7 +82,7 @@ fun ReportEmergencyScreen(
                     selectedLat = res.lat
                     selectedLng = res.lng
                     locationText = res.displayAddress
-                    gpsLabel = String.format("%.4f° N, %.4f° E (Live GPS)", res.lat, res.lng)
+                    gpsLabel = String.format(Locale.US, "%.4f° N, %.4f° E (Live GPS)", res.lat, res.lng)
                 }
             }
         }
@@ -235,9 +237,9 @@ fun ReportEmergencyScreen(
                     onMapTap = { tapLat, tapLng ->
                         selectedLat = tapLat
                         selectedLng = tapLng
-                        gpsLabel = String.format("%.4f° N, %.4f° E (Map Pin)", tapLat, tapLng)
+                        gpsLabel = String.format(Locale.US, "%.4f° N, %.4f° E (Map Pin)", tapLat, tapLng)
                         if (locationText.isBlank()) {
-                            locationText = String.format("Pin at %.4f, %.4f", tapLat, tapLng)
+                            locationText = String.format(Locale.US, "Pin at %.4f, %.4f", tapLat, tapLng)
                         }
                     }
                 )
@@ -399,7 +401,7 @@ fun ReportEmergencyScreen(
             item {
                 Button(
                     onClick = {
-                        if (selectedCategory != null && locationText.isNotBlank()) {
+                        if (selectedCategory != null && locationText.isNotBlank() && !isSubmitting) {
                             val id = viewModel.submitIncident(
                                 category = selectedCategory!!,
                                 title = title.ifBlank { "Emergency Report" },
@@ -422,9 +424,17 @@ fun ReportEmergencyScreen(
                         containerColor = EmergencyRed,
                         disabledContainerColor = LightSurfaceVariant
                     ),
-                    enabled = selectedCategory != null && locationText.isNotBlank()
+                    enabled = selectedCategory != null && locationText.isNotBlank() && !isSubmitting
                 ) {
-                    Text("Submit Emergency Report", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    if (isSubmitting) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = BrandBlue, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Submitting Report...", color = BrandBlue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        }
+                    } else {
+                        Text("Submit Emergency Report", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    }
                 }
                 Spacer(modifier = Modifier.height(32.dp))
             }

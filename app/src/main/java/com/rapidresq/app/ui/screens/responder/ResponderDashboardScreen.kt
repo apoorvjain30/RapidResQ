@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,6 +44,7 @@ fun ResponderDashboardScreen(
     val pendingCount by viewModel.pendingCount.collectAsState()
     val isSharingGps by viewModel.isResponderSharingGps.collectAsState()
 
+    var showAiSheet by remember { mutableStateOf(false) }
     val isLockedToTeam = session?.assignedTeamId != null
 
     val notifPermissionLauncher = rememberLauncherForActivityResult(
@@ -79,181 +80,201 @@ fun ResponderDashboardScreen(
         it.assignedTeamId == activeTeamId && it.status == IncidentStatus.RESOLVED 
     }.sortedByDescending { it.createdAt }
 
-    Column(modifier = modifier.fillMaxSize().background(LightBackground)) {
-        DemoModeBanner(isCloudConnected = isCloudConnected)
-
-        if (!isOnline || pendingCount > 0) {
-            Surface(
-                color = WarningAmber,
-                contentColor = Color.White,
-                modifier = Modifier.fillMaxWidth()
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text("Responder Unit - ${activeTeam?.name ?: activeTeamId}", fontWeight = FontWeight.Bold, color = BrandNavy) },
+                navigationIcon = {
+                    IconButton(onClick = onBackToRoles) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAiSheet = true },
+                containerColor = BrandBlue,
+                contentColor = Color.White
             ) {
-                Text(
-                    text = "Offline Mode • $pendingCount status action(s) queued locally",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp)
-                )
+                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
             }
         }
+    ) { innerPadding ->
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).background(LightBackground)) {
+            DemoModeBanner(isCloudConnected = isCloudConnected)
 
-        TopAppBar(
-            title = { Text("Responder Unit - ${activeTeam?.name ?: activeTeamId}", fontWeight = FontWeight.Bold, color = BrandNavy) },
-            navigationIcon = {
-                IconButton(onClick = onBackToRoles) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                }
-            },
-            actions = {
-                IconButton(onClick = { viewModel.logout(); onLogout() }) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
-        )
-
-        // Team Switcher / Unit Info Header
-        Surface(color = LightSurface, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            if (!isOnline || pendingCount > 0) {
+                Surface(
+                    color = WarningAmber,
+                    contentColor = Color.White,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
-                        Text(activeTeam?.name ?: "First Responder Unit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SlateTextPrimary)
-                        Text("${activeTeam?.unitType ?: "EMS"} • ${activeTeam?.baseLocation ?: "Indore Station"}", style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
-                    }
-                    val isAvailable = activeTeam?.isAvailable == true
-                    Surface(
-                        color = if (isAvailable) SafeEmeraldBg else EmergencyRedBg,
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text(
-                            text = if (isAvailable) "Available" else "On Assignment",
-                            color = if (isAvailable) SafeEmerald else EmergencyRed,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-
-                // GPS Sharing Toggle Chip (Privacy First)
-                if (activeIncident != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    FilterChip(
-                        selected = isSharingGps,
-                        onClick = {
-                            if (isSharingGps) {
-                                viewModel.toggleResponderLiveGps(false)
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        },
-                        label = {
-                            Text(
-                                if (isSharingGps) "Sharing Live Unit GPS" else "Share Live Unit GPS",
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.MyLocation,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = BrandBlue,
-                            selectedLabelColor = Color.White,
-                            selectedLeadingIconColor = Color.White
-                        )
+                    Text(
+                        text = "Offline Mode • $pendingCount status action(s) queued locally",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 4.dp, horizontal = 16.dp)
                     )
                 }
+            }
 
-                if (!isLockedToTeam) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    ScrollableTabRow(
-                        selectedTabIndex = teams.indexOfFirst { it.id == activeTeamId }.coerceAtLeast(0),
-                        containerColor = LightSurfaceVariant,
-                        edgePadding = 0.dp,
-                        indicator = {}
+            // Team Switcher / Unit Info Header
+            Surface(color = LightSurface, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        teams.forEach { team ->
-                            val isSelected = team.id == activeTeamId
-                            Tab(
-                                selected = isSelected,
-                                onClick = { viewModel.setActiveResponderTeam(team.id) },
-                                text = { Text(team.name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) }
+                        Column {
+                            Text(activeTeam?.name ?: "First Responder Unit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = SlateTextPrimary)
+                            Text("${activeTeam?.unitType ?: "EMS"} • ${activeTeam?.baseLocation ?: "Indore Station"}", style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
+                        }
+                        val isAvailable = activeTeam?.isAvailable == true
+                        Surface(
+                            color = if (isAvailable) SafeEmeraldBg else EmergencyRedBg,
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text = if (isAvailable) "Available" else "On Assignment",
+                                color = if (isAvailable) SafeEmerald else EmergencyRed,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
+                        }
+                    }
+
+                    // GPS Sharing Toggle Chip (Privacy First)
+                    if (activeIncident != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        FilterChip(
+                            selected = isSharingGps,
+                            onClick = {
+                                if (isSharingGps) {
+                                    viewModel.toggleResponderLiveGps(false)
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION
+                                        )
+                                    )
+                                }
+                            },
+                            label = {
+                                Text(
+                                    if (isSharingGps) "Sharing Live Unit GPS" else "Share Live Unit GPS",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.MyLocation,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BrandBlue,
+                                selectedLabelColor = Color.White,
+                                selectedLeadingIconColor = Color.White
+                            )
+                        )
+                    }
+
+                    if (!isLockedToTeam) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        PrimaryScrollableTabRow(
+                            selectedTabIndex = teams.indexOfFirst { it.id == activeTeamId }.coerceAtLeast(0),
+                            containerColor = LightSurfaceVariant,
+                            edgePadding = 0.dp,
+                            divider = {}
+                        ) {
+                            teams.forEach { team ->
+                                val isSelected = team.id == activeTeamId
+                                Tab(
+                                    selected = isSelected,
+                                    onClick = { viewModel.setActiveResponderTeam(team.id) },
+                                    text = { Text(team.name, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Active Assignment
+                item {
+                    Text("Active Emergency Assignment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (activeIncident == null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = LightSurface),
+                            border = CardDefaults.outlinedCardBorder(true)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SafeEmerald, modifier = Modifier.size(48.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("No Active Assignment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("Unit is clear and on standby for new dispatches.", style = MaterialTheme.typography.bodyMedium, color = SlateTextSecondary)
+                            }
+                        }
+                    } else {
+                        ResponderActiveIncidentCard(activeIncident, viewModel)
+                    }
+                }
+
+                // Completed History
+                if (completedIncidents.isNotEmpty()) {
+                    item {
+                        Text("Recently Resolved by ${activeTeam?.name ?: "Unit"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    items(completedIncidents) { incident ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = LightSurface),
+                            border = CardDefaults.outlinedCardBorder(true)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(incident.id, style = MaterialTheme.typography.labelMedium, color = BrandBlue, fontWeight = FontWeight.Bold)
+                                    Text(incident.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                    Text(incident.locationText, style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
+                                }
+                                StatusBadge(status = incident.status)
+                            }
                         }
                     }
                 }
             }
         }
+    }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Active Assignment
-            item {
-                Text("Active Emergency Assignment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (activeIncident == null) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = LightSurface),
-                        border = CardDefaults.outlinedCardBorder(true)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp).fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = SafeEmerald, modifier = Modifier.size(48.dp))
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("No Active Assignment", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Unit is clear and on standby for new dispatches.", style = MaterialTheme.typography.bodyMedium, color = SlateTextSecondary)
-                        }
-                    }
-                } else {
-                    ResponderActiveIncidentCard(activeIncident, viewModel)
-                }
-            }
-
-            // Completed History
-            if (completedIncidents.isNotEmpty()) {
-                item {
-                    Text("Recently Resolved by ${activeTeam?.name ?: "Unit"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                items(completedIncidents) { incident ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = LightSurface),
-                        border = CardDefaults.outlinedCardBorder(true)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(incident.id, style = MaterialTheme.typography.labelMedium, color = BrandBlue, fontWeight = FontWeight.Bold)
-                                Text(incident.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                                Text(incident.locationText, style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
-                            }
-                            StatusBadge(status = incident.status)
-                        }
-                    }
-                }
-            }
+    if (showAiSheet) {
+        AiAssistantSheet(viewModel = viewModel) {
+            showAiSheet = false
         }
     }
 }
@@ -359,7 +380,7 @@ fun ResponderActiveIncidentCard(
                             viewModel.addFieldNote(incident.id, "Responder Lead", fieldNoteText)
                             fieldNoteText = ""
                         }) {
-                            Icon(Icons.Default.Send, contentDescription = "Send Note", tint = BrandBlue)
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send Note", tint = BrandBlue)
                         }
                     }
                 }

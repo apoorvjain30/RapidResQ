@@ -24,6 +24,7 @@ class RemoteIncidentRepository(
 ) : IncidentRepository {
 
     private val client = ApiConfig.okHttpClient
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaTypeOrNull()!!
 
     private val _incidents = MutableStateFlow<List<Incident>>(emptyList())
     override val incidents: StateFlow<List<Incident>> = _incidents.asStateFlow()
@@ -47,8 +48,9 @@ class RemoteIncidentRepository(
             if (it.isNotBlank()) builder.header("Authorization", "Bearer $it")
         }
         when (method) {
-            "POST" -> builder.post(body ?: "".toRequestBody("application/json".toMediaTypeOrNull()))
-            "PATCH" -> builder.patch(body ?: "".toRequestBody("application/json".toMediaTypeOrNull()))
+            "POST" -> builder.post(body ?: "".toRequestBody(jsonMediaType))
+            "PATCH" -> builder.patch(body ?: "".toRequestBody(jsonMediaType))
+            "DELETE" -> builder.delete()
             "GET" -> builder.get()
         }
         return builder.build()
@@ -220,7 +222,7 @@ class RemoteIncidentRepository(
                             builder.addFormDataPart("media", fileName, bytes.toRequestBody(mimeType.toMediaTypeOrNull()))
                         }
                     } catch (e: Exception) {
-                        // Skip media if reading failed
+                        // Skip media
                     }
                 }
             }
@@ -262,7 +264,7 @@ class RemoteIncidentRepository(
     override suspend fun rejectIncident(incidentId: String, reason: String, actor: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply { put("reason", reason) }
-            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/reject", "POST", json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/reject", "POST", json.toString().toRequestBody(jsonMediaType))
             client.newCall(request).execute().use { res ->
                 val bodyStr = res.body?.string() ?: ""
                 val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
@@ -278,7 +280,7 @@ class RemoteIncidentRepository(
     override suspend fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply { put("teamId", teamId) }
-            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/assign", "POST", json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/assign", "POST", json.toString().toRequestBody(jsonMediaType))
             client.newCall(request).execute().use { res ->
                 val bodyStr = res.body?.string() ?: ""
                 val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
@@ -309,11 +311,26 @@ class RemoteIncidentRepository(
     override suspend fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply { put("text", text) }
-            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/notes", "POST", json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/notes", "POST", json.toString().toRequestBody(jsonMediaType))
             client.newCall(request).execute().use { res ->
                 val bodyStr = res.body?.string() ?: ""
                 val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
                 if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Note failed")))
+                refreshAllData()
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun deleteIncident(incidentId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/incidents/$incidentId", "DELETE")
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Deletion failed")))
                 refreshAllData()
                 Result.success(Unit)
             }
@@ -329,7 +346,7 @@ class RemoteIncidentRepository(
                 put("unitType", unitType)
                 put("baseLocation", baseLocation)
             }
-            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/teams", "POST", json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/teams", "POST", json.toString().toRequestBody(jsonMediaType))
             client.newCall(request).execute().use { res ->
                 val bodyStr = res.body?.string() ?: ""
                 val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
@@ -364,12 +381,83 @@ class RemoteIncidentRepository(
                 put("lat", lat)
                 put("lng", lng)
             }
-            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/teams/$teamId/location", "PATCH", json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/teams/$teamId/location", "PATCH", json.toString().toRequestBody(jsonMediaType))
             client.newCall(request).execute().use { res ->
                 val bodyStr = res.body?.string() ?: ""
                 val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
                 if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Location update failed")))
                 refreshAllData()
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun fetchAutoDispatchSetting(): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/settings")
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Fetch settings failed")))
+                Result.success(obj.optBoolean("autoDispatchEnabled", false))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun setAutoDispatchEnabled(enabled: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply { put("autoDispatchEnabled", enabled) }
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/settings", "PATCH", json.toString().toRequestBody(jsonMediaType))
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Update settings failed")))
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun createStaffMember(name: String, email: String, phone: String, pass: String, role: String, department: String, assignedTeamId: String?): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("name", name)
+                put("email", email)
+                put("phone", phone)
+                put("password", pass)
+                put("role", role)
+                put("department", department)
+                if (assignedTeamId != null) put("assignedTeamId", assignedTeamId)
+            }
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/staff", "POST", json.toString().toRequestBody(jsonMediaType))
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Staff creation failed")))
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updateStaffRole(userId: String, newRole: String, department: String, assignedTeamId: String?): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("role", newRole)
+                put("department", department)
+                if (assignedTeamId != null) put("assignedTeamId", assignedTeamId)
+            }
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/staff/$userId/role", "PATCH", json.toString().toRequestBody(jsonMediaType))
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception(obj.optString("message", "Role update failed")))
                 Result.success(Unit)
             }
         } catch (e: Exception) {
@@ -423,6 +511,124 @@ class RemoteIncidentRepository(
                     )
                 }
                 Result.success(list)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun sendAiChat(message: String, incidentId: String? = null): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("message", message)
+                if (incidentId != null) put("incidentId", incidentId)
+            }
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/ai/chat", "POST", json.toString().toRequestBody(jsonMediaType))
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) {
+                    return@withContext Result.failure(Exception(obj.optString("message", "AI chat failed")))
+                }
+                val reply = obj.optString("reply", "No response")
+                val scope = obj.optString("scopeLabel", "AI Scope")
+                Result.success(Pair(reply, scope))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun runAiTriage(incidentId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/incidents/$incidentId/ai-triage", "POST")
+            client.newCall(request).execute().use { res ->
+                if (!res.isSuccessful) return@withContext Result.failure(Exception("AI Triage failed"))
+                refreshAllData()
+                Result.success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun verifyAuditChain(): Result<AuditChainStatus> = withContext(Dispatchers.IO) {
+        try {
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/audit/verify")
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception("Audit verification failed"))
+
+                val tamperedArr = obj.optJSONArray("tamperedIds") ?: JSONArray()
+                val tamperedList = mutableListOf<String>()
+                for (i in 0 until tamperedArr.length()) {
+                    tamperedList.add(tamperedArr.getString(i))
+                }
+
+                Result.success(
+                    AuditChainStatus(
+                        valid = obj.optBoolean("valid", true),
+                        totalLogs = obj.optInt("totalLogs", 0),
+                        checkedChainedLogs = obj.optInt("checkedChainedLogs", 0),
+                        tamperedIds = tamperedList,
+                        latestHash = if (obj.has("latestHash") && !obj.isNull("latestHash")) obj.getString("latestHash") else null
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchAnalytics(): Result<AnalyticsSummary> = withContext(Dispatchers.IO) {
+        try {
+            val request = buildRequest("${ApiConfig.BASE_URL}/api/admin/analytics")
+            client.newCall(request).execute().use { res ->
+                val bodyStr = res.body?.string() ?: ""
+                val obj = if (bodyStr.isNotBlank()) JSONObject(bodyStr) else JSONObject()
+                if (!res.isSuccessful) return@withContext Result.failure(Exception("Analytics fetch failed"))
+
+                val catObj = obj.optJSONObject("byCategory") ?: JSONObject()
+                val byCategory = mutableMapOf<String, Int>()
+                catObj.keys().forEach { k -> byCategory[k] = catObj.getInt(k) }
+
+                val sevObj = obj.optJSONObject("bySeverity") ?: JSONObject()
+                val bySeverity = mutableMapOf<String, Int>()
+                sevObj.keys().forEach { k -> bySeverity[k] = sevObj.getInt(k) }
+
+                val statObj = obj.optJSONObject("byStatus") ?: JSONObject()
+                val byStatus = mutableMapOf<String, Int>()
+                statObj.keys().forEach { k -> byStatus[k] = statObj.getInt(k) }
+
+                val unitsArr = obj.optJSONArray("topUnits") ?: JSONArray()
+                val topUnits = mutableListOf<UnitAnalyticsItem>()
+                for (i in 0 until unitsArr.length()) {
+                    val u = unitsArr.getJSONObject(i)
+                    topUnits.add(
+                        UnitAnalyticsItem(
+                            id = u.getString("id"),
+                            name = u.getString("name"),
+                            unitType = u.optString("unitType", u.optString("unit_type", "")),
+                            resolvedCount = u.optInt("resolvedCount", u.optInt("resolved_count", 0)),
+                            isAvailable = if (u.has("isAvailable")) u.getBoolean("isAvailable") else u.optBoolean("is_available", true)
+                        )
+                    )
+                }
+
+                Result.success(
+                    AnalyticsSummary(
+                        totalIncidents = obj.optInt("totalIncidents", 0),
+                        activeIncidents = obj.optInt("activeIncidents", 0),
+                        resolvedIncidents = obj.optInt("resolvedIncidents", 0),
+                        rejectedIncidents = obj.optInt("rejectedIncidents", 0),
+                        totalEscalations = obj.optInt("totalEscalations", 0),
+                        byCategory = byCategory,
+                        bySeverity = bySeverity,
+                        byStatus = byStatus,
+                        topUnits = topUnits
+                    )
+                )
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -499,6 +705,10 @@ class RemoteIncidentRepository(
             assignedTeamLat = if (obj.has("assignedTeamLat") && !obj.isNull("assignedTeamLat")) obj.getDouble("assignedTeamLat") else if (obj.has("assigned_team_lat") && !obj.isNull("assigned_team_lat")) obj.getDouble("assigned_team_lat") else null,
             assignedTeamLng = if (obj.has("assignedTeamLng") && !obj.isNull("assignedTeamLng")) obj.getDouble("assignedTeamLng") else if (obj.has("assigned_team_lng") && !obj.isNull("assigned_team_lng")) obj.getDouble("assigned_team_lng") else null,
             rejectionReason = if (obj.has("rejectionReason") && !obj.isNull("rejectionReason")) obj.getString("rejectionReason") else if (obj.has("rejection_reason") && !obj.isNull("rejection_reason")) obj.getString("rejection_reason") else null,
+            aiSummary = if (obj.has("aiSummary") && !obj.isNull("aiSummary")) obj.getString("aiSummary") else if (obj.has("ai_summary") && !obj.isNull("ai_summary")) obj.getString("ai_summary") else null,
+            aiSuggestedSeverity = if (obj.has("aiSuggestedSeverity") && !obj.isNull("aiSuggestedSeverity")) obj.getString("aiSuggestedSeverity") else if (obj.has("ai_suggested_severity") && !obj.isNull("ai_suggested_severity")) obj.getString("ai_suggested_severity") else null,
+            aiRecommendedUnit = if (obj.has("aiRecommendedUnit") && !obj.isNull("aiRecommendedUnit")) obj.getString("aiRecommendedUnit") else if (obj.has("ai_recommended_unit") && !obj.isNull("ai_recommended_unit")) obj.getString("ai_recommended_unit") else null,
+            aiSpamScore = if (obj.has("aiSpamScore") && !obj.isNull("aiSpamScore")) obj.getInt("aiSpamScore") else if (obj.has("ai_spam_score") && !obj.isNull("ai_spam_score")) obj.getInt("ai_spam_score") else null,
             createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
             possibleDuplicateOf = if (obj.has("possibleDuplicateOf") && !obj.isNull("possibleDuplicateOf")) obj.getString("possibleDuplicateOf") else if (obj.has("possible_duplicate_of") && !obj.isNull("possible_duplicate_of")) obj.getString("possible_duplicate_of") else null,
             timeline = timelineList,

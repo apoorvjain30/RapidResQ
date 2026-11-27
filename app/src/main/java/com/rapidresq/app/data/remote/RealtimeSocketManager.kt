@@ -17,6 +17,7 @@ class RealtimeSocketManager {
     var onTrackedIncidentChanged: ((String) -> Unit)? = null
     var onEscalationAlert: ((String, String) -> Unit)? = null
     var onTeamLocationChanged: ((String, Double, Double) -> Unit)? = null
+    var onSettingsUpdated: ((Boolean) -> Unit)? = null
 
     private fun getOrCreateSocket(): Socket {
         if (socket == null) {
@@ -71,6 +72,15 @@ class RealtimeSocketManager {
                             if (teamId.isNotEmpty() && lat != 0.0 && lng != 0.0) {
                                 onTeamLocationChanged?.invoke(teamId, lat, lng)
                             }
+                        }
+                    }
+                }
+                on("settings:updated") { args ->
+                    if (args.isNotEmpty()) {
+                        val data = args[0]
+                        if (data is JSONObject) {
+                            val enabled = data.optBoolean("autoDispatchEnabled", false)
+                            onSettingsUpdated?.invoke(enabled)
                         }
                     }
                 }

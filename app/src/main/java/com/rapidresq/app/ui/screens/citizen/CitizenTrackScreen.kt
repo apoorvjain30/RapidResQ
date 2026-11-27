@@ -6,15 +6,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,28 +36,37 @@ fun CitizenTrackScreen(
 ) {
     val incidents by viewModel.incidents.collectAsState()
     val incident = incidents.find { it.id == incidentId }
+    var showAiSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(incidentId) {
         viewModel.trackIncident(incidentId)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(LightBackground)
-    ) {
-        TopAppBar(
-            title = { Text("Track Incident", fontWeight = FontWeight.Bold, color = BrandNavy) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
-        )
-
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text("Track Incident", fontWeight = FontWeight.Bold, color = BrandNavy) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAiSheet = true },
+                containerColor = BrandBlue,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
+            }
+        }
+    ) { innerPadding ->
         if (incident == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = SlateTextSecondary, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(16.dp))
@@ -71,6 +77,7 @@ fun CitizenTrackScreen(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(innerPadding)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -272,6 +279,12 @@ fun CitizenTrackScreen(
                     Spacer(modifier = Modifier.height(32.dp))
                 }
             }
+        }
+    }
+
+    if (showAiSheet) {
+        AiAssistantSheet(viewModel = viewModel, incidentId = incidentId) {
+            showAiSheet = false
         }
     }
 }

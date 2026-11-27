@@ -6,6 +6,7 @@ import { supabase } from '../config/supabase.js';
 import { logAudit, formatIstTime } from '../services/audit.js';
 import { analyzeIncidentTriage } from '../services/geminiService.js';
 import { requireAuth } from '../middleware/auth.js';
+import { getAutoDispatchEnabled } from './adminRoutes.js';
 
 // In-memory fallback stores when Supabase is not connected
 export const inMemoryIncidents = new Map();
@@ -253,8 +254,6 @@ export function createIncidentRoutes(io) {
       }
 
       let possibleDuplicateOf = null;
-
-      // PostGIS duplicate check if coordinates provided
       const parsedLat = parseFloat(lat);
       const parsedLng = parseFloat(lng);
 
@@ -276,17 +275,6 @@ export function createIncidentRoutes(io) {
         }
       }
 
-      // Run AI Triage asynchronously or synchronously
-      const triage = await analyzeIncidentTriage({
-        category,
-        title: title || `${category} Emergency`,
-        description: description || '',
-        locationText,
-        severity: severity || 'HIGH',
-        mediaBuffer: req.file ? req.file.buffer : null,
-        mediaMimeType: req.file ? req.file.mimetype : null
-      });
-
       const newIncident = {
         id,
         category,
@@ -296,23 +284,55 @@ export function createIncidentRoutes(io) {
         gpsLabel: gpsLabel || (parsedLat && parsedLng ? `${parsedLat}° N, ${parsedLng}° E` : null),
         lat: isNaN(parsedLat) ? null : parsedLat,
         lng: isNaN(parsedLng) ? null : parsedLng,
-        severity: severity || triage.suggestedSeverity || 'HIGH',
+        severity: severity || 'HIGH',
         reporterContact: reporterContact || '',
         media: mediaAttachments,
         status: 'REPORTED',
         assignedTeamId: null,
         assignedTeamName: null,
         createdAt: now,
-        possibleDuplicateOf,
-        aiSummary: triage.summary,
-        aiSuggestedSeverity: triage.suggestedSeverity,
-        aiRecommendedUnit: triage.recommendedUnit,
-        aiSpamScore: triage.spamRiskScore
+        possibleDuplicateOf
       };
 
       inMemoryIncidents.set(id, newIncident);
       inMemoryTimeline.set(id, [{ timestamp: now, statusLabel: 'Reported', actor: 'Citizen' }]);
       inMemoryNotes.set(id, []);
+
+      // Auto-Dispatch Logic
+      let autoAssignedTeam = null;
+      if (getAutoDispatchEnabled() && supabase && !isNaN(parsedLat) && !isNaN(parsedLng)) {
+        try {
+          const recType = getRecommendedUnitType(category);
+          const { data: rpcTeams } = await supabase.rpc('rank_available_teams', {
+            p_lat: parsedLat,
+            p_lng: parsedLng,
+            p_recommended_type: recType
+          });
+
+          if (rpcTeams && rpcTeams.length > 0) {
+            autoAssignedTeam = rpcTeams[0]; // Pick closest available
+            const teamLocal = inMemoryTeams.get(autoAssignedTeam.id);
+            if (teamLocal && teamLocal.isAvailable) {
+              teamLocal.isAvailable = false;
+              newIncident.status = 'ASSIGNED';
+              newIncident.assignedTeamId = teamLocal.id;
+              newIncident.assignedTeamName = teamLocal.name;
+              newIncident.assignedAt = now;
+
+              inMemoryTimeline.get(id).push({
+                timestamp: now + 1,
+                statusLabel: `Auto-Assigned to ${teamLocal.name}`,
+                actor: 'Auto-Dispatch Engine'
+              });
+
+              await supabase.from('response_teams').update({ is_available: false }).eq('id', teamLocal.id);
+              await logAudit('System', 'AUTO_DISPATCHED', id, `Auto-assigned to ${teamLocal.name} (${autoAssignedTeam.distance_km || 0}km)`);
+            }
+          }
+        } catch (adErr) {
+          console.error('[AUTO DISPATCH ERROR]', adErr.message);
+        }
+      }
 
       if (supabase) {
         try {
@@ -332,20 +352,18 @@ export function createIncidentRoutes(io) {
             status: newIncident.status,
             created_at: new Date(now).toISOString(),
             possible_duplicate_of: possibleDuplicateOf,
-            ai_summary: triage.summary,
-            ai_suggested_severity: triage.suggestedSeverity,
-            ai_recommended_unit: triage.recommendedUnit,
-            ai_spam_score: triage.spamRiskScore
+            assigned_team_id: newIncident.assignedTeamId,
+            assigned_team_name: newIncident.assignedTeamName
           }]);
 
-          await supabase.from('incident_timeline').insert([{
-            id: `TL-${now}-${Math.floor(Math.random() * 1000)}`,
+          await supabase.from('incident_timeline').insert(inMemoryTimeline.get(id).map((entry, index) => ({
+            id: `TL-${now}-${index}-${Math.floor(Math.random() * 1000)}`,
             incident_id: id,
-            timestamp_label: formatIstTime(new Date(now)),
-            status_label: 'Reported',
-            actor: 'Citizen',
-            note: null
-          }]);
+            timestamp_label: formatIstTime(new Date(entry.timestamp)),
+            status_label: entry.statusLabel,
+            actor: entry.actor,
+            note: entry.note || null
+          })));
         } catch (dbErr) {
           console.error('[DB INCIDENT INSERT ERROR]', dbErr.message);
         }
@@ -354,16 +372,46 @@ export function createIncidentRoutes(io) {
       await logAudit('Citizen', 'SUBMIT', id, `Incident reported (${category})`);
       await broadcastUpdates(id);
 
-      const hydrated = hydrateIncident(newIncident);
-
-      return res.status(201).json({
-        incident: hydrated,
+      // Respond immediately with 201
+      res.status(201).json({
+        incident: hydrateIncident(newIncident),
         possibleDuplicateOf,
         warning: possibleDuplicateOf ? `Possible duplicate of active incident ${possibleDuplicateOf}` : undefined
       });
+
+      // Fire AI Triage asynchronously (DO NOT AWAIT in request lifecycle)
+      analyzeIncidentTriage({
+        category,
+        title: newIncident.title,
+        description: newIncident.description,
+        locationText,
+        severity: newIncident.severity,
+        mediaBuffer: req.file ? req.file.buffer : null,
+        mediaMimeType: req.file ? req.file.mimetype : null
+      }).then(async (triage) => {
+        newIncident.aiSummary = triage.summary;
+        newIncident.aiSuggestedSeverity = triage.suggestedSeverity;
+        newIncident.aiRecommendedUnit = triage.recommendedUnit;
+        newIncident.aiSpamScore = triage.spamRiskScore;
+
+        if (supabase) {
+          await supabase.from('incidents').update({
+            ai_summary: triage.summary,
+            ai_suggested_severity: triage.suggestedSeverity,
+            ai_recommended_unit: triage.recommendedUnit,
+            ai_spam_score: triage.spamRiskScore
+          }).eq('id', id);
+        }
+        await broadcastUpdates(id);
+      }).catch(aiErr => {
+        console.error('[ASYNC AI TRIAGE ERROR]', aiErr.message);
+      });
+
     } catch (err) {
       console.error('[POST INCIDENT ERROR]', err);
-      res.status(500).json({ error: 'Server Error', message: err.message });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Server Error', message: err.message });
+      }
     }
   });
 
@@ -503,8 +551,23 @@ export function createIncidentRoutes(io) {
 
       const inc = inMemoryIncidents.get(id);
       if (!inc) return res.status(404).json({ error: 'Not Found', message: 'Incident not found' });
-      if (!['REPORTED', 'VERIFIED'].includes(inc.status)) {
-        return res.status(400).json({ error: 'Invalid Transition', message: 'Only REPORTED or VERIFIED incidents can be rejected' });
+      if (['RESOLVED', 'REJECTED'].includes(inc.status)) {
+        return res.status(400).json({ error: 'Invalid Transition', message: 'Resolved or Rejected incidents cannot be rejected again' });
+      }
+
+      // If assigned to a team, release the team
+      if (inc.assignedTeamId) {
+        const team = inMemoryTeams.get(inc.assignedTeamId);
+        if (team) {
+          team.isAvailable = true;
+          if (supabase) {
+            try {
+              await supabase.from('response_teams').update({ is_available: true }).eq('id', team.id);
+            } catch (dbErr) {
+              console.error('[DB TEAM RELEASE ERROR ON REJECT]', dbErr.message);
+            }
+          }
+        }
       }
 
       const now = Date.now();

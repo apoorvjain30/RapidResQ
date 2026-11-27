@@ -141,8 +141,47 @@ data class Incident(
     val assignedTeamLat: Double? = null,
     val assignedTeamLng: Double? = null,
     val rejectionReason: String? = null,
+    val aiSummary: String? = null,
+    val aiSuggestedSeverity: String? = null,
+    val aiRecommendedUnit: String? = null,
+    val aiSpamScore: Int? = null,
     val createdAt: Long,
     val possibleDuplicateOf: String? = null,
     val timeline: List<TimelineEntry> = emptyList(),
     val fieldNotes: List<FieldNote> = emptyList()
+)
+
+data class AiChatMessage(
+    val id: String,
+    val isUser: Boolean,
+    val text: String,
+    val timestamp: String
+)
+
+data class AuditChainStatus(
+    val valid: Boolean,
+    val totalLogs: Int,
+    val checkedChainedLogs: Int,
+    val tamperedIds: List<String>,
+    val latestHash: String?
+)
+
+data class AnalyticsSummary(
+    val totalIncidents: Int,
+    val activeIncidents: Int,
+    val resolvedIncidents: Int,
+    val rejectedIncidents: Int,
+    val totalEscalations: Int,
+    val byCategory: Map<String, Int>,
+    val bySeverity: Map<String, Int>,
+    val byStatus: Map<String, Int>,
+    val topUnits: List<UnitAnalyticsItem>
+)
+
+data class UnitAnalyticsItem(
+    val id: String,
+    val name: String,
+    val unitType: String,
+    val resolvedCount: Int,
+    val isAvailable: Boolean
 )

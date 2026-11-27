@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
 import com.rapidresq.app.data.model.Incident
+import com.rapidresq.app.ui.components.AiAssistantSheet
 import com.rapidresq.app.ui.components.CategoryIcon
 import com.rapidresq.app.ui.components.SeverityBadge
 import com.rapidresq.app.ui.components.StatusBadge
@@ -38,33 +40,42 @@ fun CitizenHomeScreen(
     val incidents by viewModel.incidents.collectAsState()
     val session by viewModel.currentSession.collectAsState()
     var trackId by remember { mutableStateOf("") }
+    var showAiSheet by remember { mutableStateOf(false) }
     
     val titleText = if (session?.isGuest == true) "Guest SOS Mode" else "Citizen Portal - ${session?.name ?: ""}"
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(LightBackground)
-    ) {
-        // Top Bar
-        TopAppBar(
-            title = { Text(titleText, fontWeight = FontWeight.Bold, color = BrandNavy) },
-            navigationIcon = {
-                IconButton(onClick = onBackToRoles) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                }
-            },
-            actions = {
-                IconButton(onClick = { viewModel.logout(); onLogout() }) {
-                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
-        )
-
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(titleText, fontWeight = FontWeight.Bold, color = BrandNavy) },
+                navigationIcon = {
+                    IconButton(onClick = onBackToRoles) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.logout(); onLogout() }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAiSheet = true },
+                containerColor = BrandBlue,
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
+            }
+        }
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -166,6 +177,12 @@ fun CitizenHomeScreen(
             item {
                 Spacer(modifier = Modifier.height(32.dp))
             }
+        }
+    }
+
+    if (showAiSheet) {
+        AiAssistantSheet(viewModel = viewModel, incidentId = null) {
+            showAiSheet = false
         }
     }
 }

@@ -39,12 +39,20 @@ fun RapidResQNavGraph() {
     val snackbarHostState = remember { SnackbarHostState() }
     
     val statusBanner by viewModel.statusBanner.collectAsState()
+    val actionFeedback by viewModel.actionFeedback.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
 
     LaunchedEffect(statusBanner) {
         statusBanner?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearStatusBanner()
+        }
+    }
+    
+    LaunchedEffect(actionFeedback) {
+        actionFeedback?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearActionFeedback()
         }
     }
 

@@ -32,11 +32,19 @@ interface IncidentRepository {
     suspend fun assignTeam(incidentId: String, teamId: String, actor: String): Result<Unit>
     suspend fun advanceResponderStatus(incidentId: String, teamId: String, actor: String): Result<Unit>
     suspend fun addFieldNote(incidentId: String, author: String, text: String): Result<Unit>
+    suspend fun deleteIncident(incidentId: String): Result<Unit>
     
     suspend fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam>
     suspend fun toggleTeamAvailability(teamId: String): Result<Unit>
     suspend fun updateTeamLocation(teamId: String, lat: Double, lng: Double): Result<Unit>
+    
+    suspend fun fetchAutoDispatchSetting(): Result<Boolean>
+    suspend fun setAutoDispatchEnabled(enabled: Boolean): Result<Unit>
+    
+    suspend fun createStaffMember(name: String, email: String, phone: String, pass: String, role: String, department: String, assignedTeamId: String?): Result<Unit>
+    suspend fun updateStaffRole(userId: String, newRole: String, department: String, assignedTeamId: String?): Result<Unit>
     suspend fun toggleStaffActive(staffId: String): Result<Unit>
+    
     fun logSecurityEvent(actorRole: String, action: String, incidentId: String = "SYSTEM", details: String)
 
     suspend fun fetchRecommendedTeams(incidentId: String): Result<List<RankedTeam>>
@@ -266,6 +274,13 @@ class DemoIncidentRepository : IncidentRepository {
         }
         return Result.failure(Exception("Incident not found"))
     }
+    
+    override suspend fun deleteIncident(incidentId: String): Result<Unit> {
+        val inc = _incidents.value.find { it.id == incidentId } ?: return Result.failure(Exception("Incident not found"))
+        _incidents.update { it.filter { i -> i.id != incidentId } }
+        logAudit("ADMIN", "INCIDENT_DELETED", incidentId, "Deleted")
+        return Result.success(Unit)
+    }
 
     override suspend fun addResponseTeam(name: String, unitType: String, baseLocation: String): Result<ResponseTeam> {
         val team = ResponseTeam(
@@ -298,6 +313,12 @@ class DemoIncidentRepository : IncidentRepository {
         }
         return Result.failure(Exception("Team not found"))
     }
+    
+    override suspend fun fetchAutoDispatchSetting(): Result<Boolean> = Result.success(false)
+    override suspend fun setAutoDispatchEnabled(enabled: Boolean): Result<Unit> = Result.success(Unit)
+    
+    override suspend fun createStaffMember(name: String, email: String, phone: String, pass: String, role: String, department: String, assignedTeamId: String?): Result<Unit> = Result.success(Unit)
+    override suspend fun updateStaffRole(userId: String, newRole: String, department: String, assignedTeamId: String?): Result<Unit> = Result.success(Unit)
 
     override suspend fun toggleStaffActive(staffId: String): Result<Unit> {
         var updated: StaffAccount? = null

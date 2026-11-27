@@ -21,7 +21,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
-import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.*
 
 class RapidResQViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -41,8 +42,20 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private val incidentRepository: IncidentRepository = remoteIncidentRepository
-
     private val remoteAuthRepository = RemoteAuthRepository(incidentRepository)
+
+    // Action State Flags
+    private val _isSubmittingReport = MutableStateFlow(false)
+    val isSubmittingReport: StateFlow<Boolean> = _isSubmittingReport.asStateFlow()
+
+    private val _isActionInProgress = MutableStateFlow(false)
+    val isActionInProgress: StateFlow<Boolean> = _isActionInProgress.asStateFlow()
+
+    private val _autoDispatchEnabled = MutableStateFlow(false)
+    val autoDispatchEnabled: StateFlow<Boolean> = _autoDispatchEnabled.asStateFlow()
+
+    private val _actionFeedback = MutableStateFlow<String?>(null)
+    val actionFeedback: StateFlow<String?> = _actionFeedback.asStateFlow()
 
     val socketManager = RealtimeSocketManager().apply {
         onIncidentsChanged = {
@@ -55,17 +68,19 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
                 remoteIncidentRepository.trackIncident(incidentId)
             }
         }
-        onEscalationAlert = { incidentId, message ->
-            showStatus("ESCALATION ALERT: $message")
+        onEscalationAlert = { _, message ->
             notificationHelper.showAlert("Dispatch Escalated", message)
             viewModelScope.launch(Dispatchers.IO) {
                 remoteIncidentRepository.refreshAllData()
             }
         }
-        onTeamLocationChanged = { teamId, lat, lng ->
+        onTeamLocationChanged = { _, _, _ ->
             viewModelScope.launch(Dispatchers.IO) {
                 remoteIncidentRepository.refreshAllData()
             }
+        }
+        onSettingsUpdated = { enabled ->
+            _autoDispatchEnabled.value = enabled
         }
     }
 
@@ -79,14 +94,33 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
     private val _recommendedTeams = MutableStateFlow<List<RankedTeam>>(emptyList())
     val recommendedTeams: StateFlow<List<RankedTeam>> = _recommendedTeams.asStateFlow()
 
+    // AI Chat & Triage State
+    private val _chatMessages = MutableStateFlow<List<AiChatMessage>>(emptyList())
+    val chatMessages: StateFlow<List<AiChatMessage>> = _chatMessages.asStateFlow()
+
+    private val _isAiThinking = MutableStateFlow(false)
+    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+
+    private val _aiScopeLabel = MutableStateFlow("General Public Scope")
+    val aiScopeLabel: StateFlow<String> = _aiScopeLabel.asStateFlow()
+
+    private val _auditChainStatus = MutableStateFlow<AuditChainStatus?>(null)
+    val auditChainStatus: StateFlow<AuditChainStatus?> = _auditChainStatus.asStateFlow()
+
+    private val _analyticsSummary = MutableStateFlow<AnalyticsSummary?>(null)
+    val analyticsSummary: StateFlow<AnalyticsSummary?> = _analyticsSummary.asStateFlow()
+
     val activeOtpChallenge = remoteAuthRepository.activeOtpChallenge
     val simulatedOtpNotice = remoteAuthRepository.simulatedOtpNotice
+    
+    private val _statusBanner = MutableStateFlow<String?>(null)
+    val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
+    
+    fun clearStatusBanner() { _statusBanner.value = null }
+    private fun showStatus(message: String) { _statusBanner.value = message }
 
     private val _activeResponderTeamId = MutableStateFlow("TEAM-BRAVO")
     val activeResponderTeamId: StateFlow<String> = _activeResponderTeamId.asStateFlow()
-
-    private val _statusBanner = MutableStateFlow<String?>(null)
-    val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
     private val _isResponderSharingGps = MutableStateFlow(false)
     val isResponderSharingGps: StateFlow<Boolean> = _isResponderSharingGps.asStateFlow()
@@ -101,6 +135,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
             if (!restored.isGuest) {
                 viewModelScope.launch(Dispatchers.IO) {
                     remoteIncidentRepository.refreshAllData()
+                    fetchAutoDispatchSetting()
                     socketManager.connectAndJoinStaff(restored.token)
                 }
             }
@@ -141,7 +176,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // Replay queue when online state transitions back to true
+        // Replay queue when online
         viewModelScope.launch {
             isOnline.collect { online ->
                 if (online) {
@@ -179,7 +214,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
                         }
                     }
                     if (count > 0) {
-                        showStatus("Synced $count offline action(s) to cloud")
+                        showFeedback("Synced $count offline action(s) to cloud")
                         remoteIncidentRepository.refreshAllData()
                     }
                 }
@@ -191,6 +226,142 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         socketManager.disconnect()
         locationHelper.stopDutyLocationUpdates()
+    }
+
+    fun clearActionFeedback() {
+        _actionFeedback.value = null
+    }
+
+    private fun showFeedback(message: String) {
+        _actionFeedback.value = message
+    }
+
+    // --- Admin Operations ---
+    private suspend fun fetchAutoDispatchSetting() {
+        val res = remoteIncidentRepository.fetchAutoDispatchSetting()
+        if (res.isSuccess) {
+            _autoDispatchEnabled.value = res.getOrDefault(false)
+        }
+    }
+
+    fun setAutoDispatchEnabled(enabled: Boolean) {
+        _isActionInProgress.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val res = remoteIncidentRepository.setAutoDispatchEnabled(enabled)
+            if (res.isSuccess) {
+                _autoDispatchEnabled.value = enabled
+                showFeedback("Auto-dispatch ${if (enabled) "Enabled" else "Disabled"}")
+            } else {
+                showFeedback("Failed to update auto-dispatch: ${res.exceptionOrNull()?.message}")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    fun createStaffMember(name: String, email: String, phone: String, pass: String, role: String, department: String, assignedTeamId: String?) {
+        _isActionInProgress.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val res = remoteIncidentRepository.createStaffMember(name, email, phone, pass, role, department, assignedTeamId)
+            if (res.isSuccess) {
+                showFeedback("Staff member created successfully")
+                remoteIncidentRepository.refreshAllData()
+            } else {
+                showFeedback("Failed to create staff: ${res.exceptionOrNull()?.message}")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    fun updateStaffRole(userId: String, newRole: String, department: String, assignedTeamId: String?) {
+        _isActionInProgress.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val res = remoteIncidentRepository.updateStaffRole(userId, newRole, department, assignedTeamId)
+            if (res.isSuccess) {
+                showFeedback("Staff role updated successfully")
+                remoteIncidentRepository.refreshAllData()
+            } else {
+                showFeedback("Failed to update role: ${res.exceptionOrNull()?.message}")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    fun deleteIncident(incidentId: String) {
+        _isActionInProgress.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val res = remoteIncidentRepository.deleteIncident(incidentId)
+            if (res.isSuccess) {
+                showFeedback("Incident deleted successfully")
+                remoteIncidentRepository.refreshAllData()
+            } else {
+                showFeedback("Failed to delete incident: ${res.exceptionOrNull()?.message}")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    // --- AI Chat & Triage Methods ---
+
+    fun sendAiMessage(message: String, incidentId: String? = null) {
+        if (message.isBlank()) return
+        val timeLabel = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val userMsg = AiChatMessage(id = UUID.randomUUID().toString(), isUser = true, text = message, timestamp = timeLabel)
+        _chatMessages.value = _chatMessages.value + userMsg
+        _isAiThinking.value = true
+
+        viewModelScope.launch {
+            val res = remoteIncidentRepository.sendAiChat(message, incidentId)
+            _isAiThinking.value = false
+            if (res.isSuccess) {
+                val pair = res.getOrNull()!!
+                _aiScopeLabel.value = pair.second
+                val aiMsg = AiChatMessage(id = UUID.randomUUID().toString(), isUser = false, text = pair.first, timestamp = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()))
+                _chatMessages.value = _chatMessages.value + aiMsg
+            } else {
+                val errMsg = AiChatMessage(id = UUID.randomUUID().toString(), isUser = false, text = "AI service error: ${res.exceptionOrNull()?.message ?: "Unable to connect"}", timestamp = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()))
+                _chatMessages.value = _chatMessages.value + errMsg
+            }
+        }
+    }
+
+    fun clearAiChat() {
+        _chatMessages.value = emptyList()
+    }
+
+    fun triggerAiTriage(incidentId: String) {
+        _isActionInProgress.value = true
+        viewModelScope.launch {
+            val res = remoteIncidentRepository.runAiTriage(incidentId)
+            if (res.isSuccess) {
+                showFeedback("AI Triage refreshed successfully")
+            } else {
+                showFeedback("AI Triage failed")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    fun verifyAuditIntegrity() {
+        _isActionInProgress.value = true
+        viewModelScope.launch {
+            val res = remoteIncidentRepository.verifyAuditChain()
+            if (res.isSuccess) {
+                _auditChainStatus.value = res.getOrNull()
+                showFeedback("Audit chain verified successfully")
+            } else {
+                showFeedback("Audit verification failed")
+            }
+            _isActionInProgress.value = false
+        }
+    }
+
+    fun loadAnalytics() {
+        viewModelScope.launch {
+            val res = remoteIncidentRepository.fetchAnalytics()
+            if (res.isSuccess) {
+                _analyticsSummary.value = res.getOrNull()
+            }
+        }
     }
 
     // --- Hardware GPS Helpers ---
@@ -220,6 +391,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Auth Actions ---
 
     fun loginWithPassword(email: String, pass: String): Result<Pair<UserSession?, UserRole>> = runBlocking(Dispatchers.IO) {
+        _isActionInProgress.value = true
         val result = remoteAuthRepository.loginWithPassword(email, pass)
         if (result.isSuccess) {
             val session = result.getOrNull()?.first
@@ -228,14 +400,17 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
                 _currentSession.value = session
                 viewModelScope.launch(Dispatchers.IO) {
                     remoteIncidentRepository.refreshAllData()
+                    fetchAutoDispatchSetting()
                     socketManager.connectAndJoinStaff(session.token)
                 }
             }
         }
+        _isActionInProgress.value = false
         result
     }
 
     fun verifyActiveOtp(code: String): Result<Unit> = runBlocking(Dispatchers.IO) {
+        _isActionInProgress.value = true
         val result = remoteAuthRepository.verifyActiveOtp(code)
         if (result.isSuccess) {
             val session = result.getOrNull()!!
@@ -246,10 +421,13 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
             }
             viewModelScope.launch(Dispatchers.IO) {
                 remoteIncidentRepository.refreshAllData()
+                fetchAutoDispatchSetting()
                 socketManager.connectAndJoinStaff(session.token)
             }
+            _isActionInProgress.value = false
             return@runBlocking Result.success(Unit)
         }
+        _isActionInProgress.value = false
         return@runBlocking Result.failure(result.exceptionOrNull() ?: Exception("Verification failed"))
     }
 
@@ -268,6 +446,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
     fun enterGuestSos() {
         val guestSession = UserSession("guest@rapidresq.in", "Guest Citizen", UserRole.CITIZEN, null, UUID.randomUUID().toString(), System.currentTimeMillis() + 8 * 3600 * 1000, true)
         _currentSession.value = guestSession
+        clearAiChat()
     }
 
     fun logout() {
@@ -279,6 +458,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         socketManager.disconnect()
         sessionManager.clearSession()
         _currentSession.value = null
+        clearAiChat()
     }
 
     // --- Incident & Realtime Operations ---
@@ -305,8 +485,6 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun clearStatusBanner() { _statusBanner.value = null }
-    private fun showStatus(message: String) { _statusBanner.value = message }
     fun setActiveResponderTeam(teamId: String) { _activeResponderTeamId.value = teamId }
 
     fun submitIncident(
@@ -321,12 +499,12 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         lat: Double? = null,
         lng: Double? = null
     ): String? = runBlocking(Dispatchers.IO) {
+        _isSubmittingReport.value = true
         val result = remoteIncidentRepository.submitIncident(category, title, description, locationText, gpsLabel, severity, reporterContact, media, lat, lng)
-        if (result.isSuccess) {
-            showStatus("Incident submitted successfully")
+        val finalId = if (result.isSuccess) {
+            showFeedback("Incident submitted successfully")
             result.getOrNull()
         } else {
-            // Queue offline if network error
             val payload = JSONObject().apply {
                 put("category", category.name)
                 put("title", title)
@@ -340,42 +518,50 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
             }.toString()
 
             offlineQueueManager.enqueueAction("SUBMIT_INCIDENT", payload)
-            showStatus("Offline: Saved locally and will auto-sync when connected.")
+            showFeedback("Offline: Saved locally and will auto-sync when connected.")
             "RRQ-QUEUED-${UUID.randomUUID().toString().take(6).uppercase()}"
         }
+        _isSubmittingReport.value = false
+        finalId
     }
 
     fun verifyIncident(incidentId: String, actor: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.verifyIncident(incidentId, actor)
-            if (res.isSuccess) showStatus("Incident verified") else showStatus("Verification failed: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Incident verified") else showFeedback("Verification failed: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun rejectIncident(incidentId: String, reason: String, actor: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.rejectIncident(incidentId, reason, actor)
-            if (res.isSuccess) showStatus("Incident rejected") else showStatus("Rejection failed: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Incident rejected") else showFeedback("Rejection failed: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun assignTeam(incidentId: String, teamId: String, actor: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.assignTeam(incidentId, teamId, actor)
             if (res.isSuccess) {
                 _activeResponderTeamId.value = teamId
-                showStatus("Team assigned successfully")
-            } else showStatus("Assignment failed: ${res.exceptionOrNull()?.message}")
+                showFeedback("Team assigned successfully")
+            } else showFeedback("Assignment failed: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun advanceResponderStatus(incidentId: String, actor: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.advanceResponderStatus(incidentId, _activeResponderTeamId.value, actor)
             if (res.isSuccess) {
-                showStatus("Status updated")
+                showFeedback("Status updated")
             } else {
-                // Queue offline if network error
                 val payload = JSONObject().apply {
                     put("incidentId", incidentId)
                     put("teamId", _activeResponderTeamId.value)
@@ -383,36 +569,45 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
                 }.toString()
 
                 offlineQueueManager.enqueueAction("ADVANCE_STATUS", payload)
-                showStatus("Offline: Status change queued locally.")
+                showFeedback("Offline: Status change queued locally.")
             }
+            _isActionInProgress.value = false
         }
     }
 
     fun addFieldNote(incidentId: String, author: String, text: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.addFieldNote(incidentId, author, text)
-            if (res.isSuccess) showStatus("Field note added") else showStatus("Failed to add field note: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Field note added") else showFeedback("Failed to add field note: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun addResponseTeam(name: String, unitType: String, baseLocation: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.addResponseTeam(name, unitType, baseLocation)
-            if (res.isSuccess) showStatus("Team added successfully") else showStatus("Failed to add team: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Team added successfully") else showFeedback("Failed to add team: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun toggleTeamAvailability(teamId: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.toggleTeamAvailability(teamId)
-            if (res.isSuccess) showStatus("Team availability updated") else showStatus("Failed to update team: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Team availability updated") else showFeedback("Failed to update team: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
     fun toggleStaffActive(staffId: String) {
+        _isActionInProgress.value = true
         viewModelScope.launch(Dispatchers.IO) {
             val res = remoteIncidentRepository.toggleStaffActive(staffId)
-            if (res.isSuccess) showStatus("Staff access updated") else showStatus("Failed to update staff: ${res.exceptionOrNull()?.message}")
+            if (res.isSuccess) showFeedback("Staff access updated") else showFeedback("Failed to update staff: ${res.exceptionOrNull()?.message}")
+            _isActionInProgress.value = false
         }
     }
 
