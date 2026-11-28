@@ -4,7 +4,7 @@ import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
 object ApiConfig {
-    const val BASE_URL = "http://127.0.0.1:4000"
+    const val BASE_URL = "https://rapidresq-api-3x8n.onrender.com"
 
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
