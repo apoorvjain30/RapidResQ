@@ -67,7 +67,7 @@ class RemoteAuthRepository(
                     
                     if (deliveredVia == "simulated" && hint.isNotBlank()) {
                         _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
-                    } else if (deliveredVia == "smtp") {
+                    } else if (deliveredVia == "smtp" || deliveredVia == "brevo-https") {
                         _simulatedOtpNotice.value = "6-digit verification code sent to $reqEmail. Check Inbox or Spam."
                     } else {
                         _simulatedOtpNotice.value = null
@@ -173,7 +173,7 @@ class RemoteAuthRepository(
                 
                 if (deliveredVia == "simulated" && hint.isNotBlank()) {
                     _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
-                } else if (deliveredVia == "smtp") {
+                } else if (deliveredVia == "smtp" || deliveredVia == "brevo-https") {
                     _simulatedOtpNotice.value = "6-digit verification code sent to ${challenge.email}. Check Inbox or Spam."
                 }
                 Result.success(Unit)
@@ -214,7 +214,7 @@ class RemoteAuthRepository(
                 
                 if (deliveredVia == "simulated" && hint.isNotBlank()) {
                     _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
-                } else if (deliveredVia == "smtp") {
+                } else if (deliveredVia == "smtp" || deliveredVia == "brevo-https") {
                     _simulatedOtpNotice.value = "6-digit verification code sent to $reqEmail. Check Inbox or Spam."
                 }
 
@@ -250,7 +250,7 @@ class RemoteAuthRepository(
                 
                 if (deliveredVia == "simulated" && hint.isNotBlank()) {
                     _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
-                } else if (deliveredVia == "smtp") {
+                } else if (deliveredVia == "smtp" || deliveredVia == "brevo-https") {
                     _simulatedOtpNotice.value = "6-digit verification code sent to $email. Check Inbox or Spam."
                 }
                 Result.success(Unit)
