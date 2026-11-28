@@ -8,10 +8,13 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class QueueItem(
@@ -48,13 +51,16 @@ class OfflineQueueManager(context: Context) {
     private val _isOnline = MutableStateFlow(checkInitialConnectivity())
     val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
-    private val _pendingCount = MutableStateFlow(getRecordCount())
+    private val _pendingCount = MutableStateFlow(0)
     val pendingCount: StateFlow<Int> = _pendingCount.asStateFlow()
 
     private var activeExecutor: (suspend (String, String) -> Boolean)? = null
 
     init {
         registerNetworkCallback()
+        CoroutineScope(Dispatchers.IO).launch {
+            _pendingCount.value = getRecordCount()
+        }
     }
 
     private fun checkInitialConnectivity(): Boolean {

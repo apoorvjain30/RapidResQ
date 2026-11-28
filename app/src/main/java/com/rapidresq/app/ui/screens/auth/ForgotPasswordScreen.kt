@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
@@ -60,28 +61,36 @@ fun ForgotPasswordScreen(
     val passMatches = newPassword.isNotEmpty() && newPassword == confirmPassword
     val isPassValid = passHasUpper && passHasLower && passHasDigit && passHasLength && passMatches
 
+    val scope = rememberCoroutineScope()
+
     fun requestOtp() {
         if (email.isBlank()) return
         errorMessage = null
-        val result = viewModel.requestPasswordResetOtp(email)
-        if (result.isSuccess) step = ResetStep.OTP
-        else errorMessage = result.exceptionOrNull()?.message ?: "Failed to send reset code"
+        scope.launch {
+            val result = viewModel.requestPasswordResetOtp(email)
+            if (result.isSuccess) step = ResetStep.OTP
+            else errorMessage = result.exceptionOrNull()?.message ?: "Failed to send reset code"
+        }
     }
 
     fun verifyOtp() {
         if (otp.length != 6) return
         errorMessage = null
-        val result = viewModel.verifyResetOtp(email, otp)
-        if (result.isSuccess) step = ResetStep.NEW_PASSWORD
-        else errorMessage = result.exceptionOrNull()?.message ?: "Invalid code"
+        scope.launch {
+            val result = viewModel.verifyResetOtp(email, otp)
+            if (result.isSuccess) step = ResetStep.NEW_PASSWORD
+            else errorMessage = result.exceptionOrNull()?.message ?: "Invalid code"
+        }
     }
 
     fun submitNewPassword() {
         if (!isPassValid) return
         errorMessage = null
-        val result = viewModel.completePasswordReset(email, newPassword)
-        if (result.isSuccess) step = ResetStep.SUCCESS
-        else errorMessage = result.exceptionOrNull()?.message ?: "Failed to reset password"
+        scope.launch {
+            val result = viewModel.completePasswordReset(email, newPassword)
+            if (result.isSuccess) step = ResetStep.SUCCESS
+            else errorMessage = result.exceptionOrNull()?.message ?: "Failed to reset password"
+        }
     }
 
     Column(

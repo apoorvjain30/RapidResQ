@@ -6,6 +6,8 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.rapidresq.app.data.model.UserRole
 import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -77,7 +79,7 @@ class KeystoreSessionManager(context: Context) {
 
     private fun getSecretKey(): SecretKey = keyStore.getKey(keyAlias, null) as SecretKey
 
-    fun saveSession(session: UserSession) {
+    suspend fun saveSession(session: UserSession) = withContext(Dispatchers.IO) {
         try {
             val json = JSONObject().apply {
                 put("email", session.email)
@@ -103,10 +105,10 @@ class KeystoreSessionManager(context: Context) {
         }
     }
 
-    fun getSession(): UserSession? {
+    suspend fun getSession(): UserSession? = withContext(Dispatchers.IO) {
         try {
-            val ivStr = prefs.getString("session_iv", null) ?: return null
-            val dataStr = prefs.getString("session_data", null) ?: return null
+            val ivStr = prefs.getString("session_iv", null) ?: return@withContext null
+            val dataStr = prefs.getString("session_data", null) ?: return@withContext null
 
             val iv = Base64.decode(ivStr, Base64.DEFAULT)
             val encrypted = Base64.decode(dataStr, Base64.DEFAULT)
@@ -121,10 +123,10 @@ class KeystoreSessionManager(context: Context) {
             val expiresAt = json.getLong("expiresAtEpochMs")
             if (System.currentTimeMillis() > expiresAt) {
                 clearSession()
-                return null
+                return@withContext null
             }
 
-            return UserSession(
+            return@withContext UserSession(
                 email = json.getString("email"),
                 name = json.getString("name"),
                 role = UserRole.valueOf(json.getString("role")),
@@ -135,7 +137,7 @@ class KeystoreSessionManager(context: Context) {
             )
         } catch (e: Exception) {
             clearSession()
-            return null
+            return@withContext null
         }
     }
 

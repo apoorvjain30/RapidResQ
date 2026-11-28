@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,26 +60,32 @@ fun OtpVerificationScreen(
         }
     }
 
+    val scope = rememberCoroutineScope()
+
     fun attemptVerify() {
         if (otpValue.length != 6) return
         errorMessage = null
-        val result = viewModel.verifyActiveOtp(otpValue)
-        if (result.isSuccess) {
-            onVerified()
-        } else {
-            errorMessage = result.exceptionOrNull()?.message ?: "Verification failed"
-            otpValue = "" // Reset on fail
+        scope.launch {
+            val result = viewModel.verifyActiveOtp(otpValue)
+            if (result.isSuccess) {
+                onVerified()
+            } else {
+                errorMessage = result.exceptionOrNull()?.message ?: "Verification failed"
+                otpValue = "" // Reset on fail
+            }
         }
     }
 
     fun attemptResend() {
         errorMessage = null
         otpValue = ""
-        val result = viewModel.resendActiveOtp()
-        if (result.isSuccess) {
-            timeLeft = 300
-        } else {
-            errorMessage = result.exceptionOrNull()?.message ?: "Failed to resend"
+        scope.launch {
+            val result = viewModel.resendActiveOtp()
+            if (result.isSuccess) {
+                timeLeft = 300
+            } else {
+                errorMessage = result.exceptionOrNull()?.message ?: "Failed to resend"
+            }
         }
     }
 

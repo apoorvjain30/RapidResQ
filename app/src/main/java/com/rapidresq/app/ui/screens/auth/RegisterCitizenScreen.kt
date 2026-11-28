@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
@@ -48,14 +49,18 @@ fun RegisterCitizenScreen(
     val passMatches = password.isNotEmpty() && password == confirmPassword
     val isFormValid = name.isNotBlank() && email.isNotBlank() && phone.isNotBlank() && passHasUpper && passHasLower && passHasDigit && passHasLength && passMatches
 
+    val scope = rememberCoroutineScope()
+
     fun attemptRegister() {
         if (!isFormValid) return
         errorMessage = null
-        val result = viewModel.registerCitizen(name, email, phone, password)
-        if (result.isSuccess) {
-            onRequireOtp()
-        } else {
-            errorMessage = result.exceptionOrNull()?.message ?: "Registration failed"
+        scope.launch {
+            val result = viewModel.registerCitizen(name, email, phone, password)
+            if (result.isSuccess) {
+                onRequireOtp()
+            } else {
+                errorMessage = result.exceptionOrNull()?.message ?: "Registration failed"
+            }
         }
     }
 

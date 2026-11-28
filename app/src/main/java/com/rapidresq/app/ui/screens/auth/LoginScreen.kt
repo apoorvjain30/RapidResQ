@@ -1,6 +1,7 @@
 package com.rapidresq.app.ui.screens.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -48,22 +50,26 @@ fun LoginScreen(
     val isActionInProgress by viewModel.isActionInProgress.collectAsState()
     val globalLoadingMessage by viewModel.globalLoadingMessage.collectAsState()
 
+    val scope = rememberCoroutineScope()
+
     fun attemptLogin() {
         if (email.isBlank() || password.isBlank()) {
             errorMessage = "Please enter email and password"
             return
         }
         errorMessage = null
-        val result = viewModel.loginWithPassword(email, password)
-        if (result.isSuccess) {
-            val sessionPair = result.getOrNull()!!
-            if (sessionPair.first == null) {
-                onRequireOtp()
+        scope.launch {
+            val result = viewModel.loginWithPassword(email, password)
+            if (result.isSuccess) {
+                val sessionPair = result.getOrNull()!!
+                if (sessionPair.first == null) {
+                    onRequireOtp()
+                } else {
+                    onLoginSuccess(sessionPair.second)
+                }
             } else {
-                onLoginSuccess(sessionPair.second)
+                errorMessage = result.exceptionOrNull()?.message ?: "Authentication failed"
             }
-        } else {
-            errorMessage = result.exceptionOrNull()?.message ?: "Authentication failed"
         }
     }
 
@@ -142,7 +148,7 @@ fun LoginScreen(
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("Account Sign In", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Staff accounts require 2-step OTP", fontSize = 13.sp, color = TextMuted)
+                    Text("Protected by 2-step email OTP verification", fontSize = 13.sp, color = TextMuted)
                     Spacer(modifier = Modifier.height(20.dp))
 
                     if (errorMessage != null) {
@@ -242,10 +248,12 @@ fun LoginScreen(
 @Composable
 private fun DemoChip(label: String, onClick: () -> Unit) {
     Surface(
-        color = LightSurfaceVariant,
+        color = Color(0xFF1A2438),
+        contentColor = Color(0xFFF8FAFC),
         shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color(0xFF334155)),
         modifier = Modifier.clickable(onClick = onClick)
     ) {
-        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
     }
 }

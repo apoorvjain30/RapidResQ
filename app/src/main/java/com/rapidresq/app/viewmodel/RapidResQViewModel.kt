@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -419,7 +419,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Auth Actions ---
 
-    fun loginWithPassword(email: String, pass: String): Result<Pair<UserSession?, UserRole>> = runBlocking(Dispatchers.IO) {
+    suspend fun loginWithPassword(email: String, pass: String): Result<Pair<UserSession?, UserRole>> = withContext(Dispatchers.IO) {
         withLoading("Signing in & sending OTP...") {
             _isActionInProgress.value = true
             try {
@@ -444,7 +444,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun verifyActiveOtp(code: String): Result<Unit> = runBlocking(Dispatchers.IO) {
+    suspend fun verifyActiveOtp(code: String): Result<Unit> = withContext(Dispatchers.IO) {
         withLoading("Verifying security code...") {
             _isActionInProgress.value = true
             try {
@@ -470,13 +470,13 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun resendActiveOtp() = runBlocking(Dispatchers.IO) {
+    suspend fun resendActiveOtp() = withContext(Dispatchers.IO) {
         withLoading("Sending new verification code...") {
             remoteAuthRepository.resendActiveOtp()
         }
     }
     
-    fun registerCitizen(name: String, email: String, phone: String, pass: String) = runBlocking(Dispatchers.IO) {
+    suspend fun registerCitizen(name: String, email: String, phone: String, pass: String) = withContext(Dispatchers.IO) {
         withLoading("Creating account & sending OTP...") {
             val res = remoteAuthRepository.registerCitizen(name, email, phone, pass)
             if (res.isSuccess) {
@@ -486,19 +486,19 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
     
-    fun requestPasswordResetOtp(email: String) = runBlocking(Dispatchers.IO) {
+    suspend fun requestPasswordResetOtp(email: String) = withContext(Dispatchers.IO) {
         withLoading("Sending reset code to email...") {
             remoteAuthRepository.requestPasswordResetOtp(email)
         }
     }
     
-    fun verifyResetOtp(email: String, code: String) = runBlocking(Dispatchers.IO) {
+    suspend fun verifyResetOtp(email: String, code: String) = withContext(Dispatchers.IO) {
         withLoading("Verifying reset code...") {
             remoteAuthRepository.verifyResetOtp(email, code)
         }
     }
     
-    fun completePasswordReset(email: String, newPass: String) = runBlocking(Dispatchers.IO) {
+    suspend fun completePasswordReset(email: String, newPass: String) = withContext(Dispatchers.IO) {
         withLoading("Updating password...") {
             remoteAuthRepository.completePasswordReset(email, newPass)
         }
@@ -557,7 +557,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setActiveResponderTeam(teamId: String) { _activeResponderTeamId.value = teamId }
 
-    fun submitIncident(
+    suspend fun submitIncident(
         category: EmergencyCategory,
         title: String,
         description: String,
@@ -568,7 +568,7 @@ class RapidResQViewModel(application: Application) : AndroidViewModel(applicatio
         media: List<MediaAttachment>?,
         lat: Double? = null,
         lng: Double? = null
-    ): String? = runBlocking(Dispatchers.IO) {
+    ): String? = withContext(Dispatchers.IO) {
         withLoading("Submitting emergency report...") {
             _isSubmittingReport.value = true
             val result = remoteIncidentRepository.submitIncident(category, title, description, locationText, gpsLabel, severity, reporterContact, media, lat, lng)

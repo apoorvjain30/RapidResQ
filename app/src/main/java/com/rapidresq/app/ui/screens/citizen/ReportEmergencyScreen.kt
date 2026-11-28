@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.rapidresq.app.data.model.EmergencyCategory
 import com.rapidresq.app.data.model.IncidentSeverity
@@ -406,23 +407,26 @@ fun ReportEmergencyScreen(
 
             // Submit Button
             item {
+                val scope = rememberCoroutineScope()
                 Button(
                     onClick = {
                         if (selectedCategory != null && locationText.isNotBlank() && !isSubmitting) {
-                            val id = viewModel.submitIncident(
-                                category = selectedCategory!!,
-                                title = title.ifBlank { "Emergency Report" },
-                                description = description,
-                                locationText = locationText,
-                                gpsLabel = gpsLabel,
-                                severity = selectedSeverity,
-                                reporterContact = reporterContact,
-                                media = attachedMedia?.let { listOf(it) },
-                                lat = selectedLat,
-                                lng = selectedLng
-                            )
-                            if (id != null) {
-                                onReportSubmitted(id)
+                            scope.launch {
+                                val id = viewModel.submitIncident(
+                                    category = selectedCategory!!,
+                                    title = title.ifBlank { "Emergency Report" },
+                                    description = description,
+                                    locationText = locationText,
+                                    gpsLabel = gpsLabel,
+                                    severity = selectedSeverity,
+                                    reporterContact = reporterContact,
+                                    media = attachedMedia?.let { listOf(it) },
+                                    lat = selectedLat,
+                                    lng = selectedLng
+                                )
+                                if (id != null) {
+                                    onReportSubmitted(id)
+                                }
                             }
                         }
                     },

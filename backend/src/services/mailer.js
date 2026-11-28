@@ -27,8 +27,6 @@ function getTransporter() {
 }
 
 export async function sendOtpEmail(email, code, purpose) {
-  const transporter = getTransporter();
-  const from = process.env.SMTP_FROM || 'RapidResQ <no-reply@rapidresq.in>';
   const requireRealOtp = process.env.REQUIRE_REAL_OTP === 'true';
 
   let purposeLabel = 'your account';
@@ -36,36 +34,75 @@ export async function sendOtpEmail(email, code, purpose) {
   if (purpose === 'LOGIN_MFA') purposeLabel = 'your login attempt';
   if (purpose === 'PASSWORD_RESET') purposeLabel = 'your password reset request';
 
-  if (transporter) {
-    try {
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #23304a; border-radius: 12px; background-color: #111827; color: #f8fafc;">
-          <h2 style="color: #3b82f6; margin-top: 0;">RapidResQ Security</h2>
-          <p style="color: #cbd5e1; font-size: 16px;">Here is your verification code for ${purposeLabel}:</p>
-          <div style="background-color: #0d1424; padding: 16px; border-radius: 8px; text-align: center; margin: 24px 0; border: 1px solid #23304a;">
-            <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #3b82f6; letter-spacing: 6px;">${code}</span>
-          </div>
-          <p style="color: #94a3b8; font-size: 14px;">This code will expire in 5 minutes. If you didn't request this code, you can safely ignore this email.</p>
-        </div>
-      `;
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #23304a; border-radius: 12px; background-color: #111827; color: #f8fafc;">
+      <h2 style="color: #3b82f6; margin-top: 0;">RapidResQ Security</h2>
+      <p style="color: #cbd5e1; font-size: 16px;">Here is your verification code for ${purposeLabel}:</p>
+      <div style="background-color: #0d1424; padding: 16px; border-radius: 8px; text-align: center; margin: 24px 0; border: 1px solid #23304a;">
+        <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #3b82f6; letter-spacing: 6px;">${code}</span>
+      </div>
+      <p style="color: #94a3b8; font-size: 14px;">This code will expire in 5 minutes. If you didn't request this code, you can safely ignore this email.</p>
+    </div>
+  `;
+  const textContent = `Your RapidResQ verification code is: ${code}. It expires in 5 minutes.`;
+  const subject = `RapidResQ Verification Code: ${code}`;
 
-      await transporter.sendMail({
-        from,
-        to: email,
-        subject: `RapidResQ Verification Code: ${code}`,
-        text: `Your RapidResQ verification code is: ${code}. It expires in 5 minutes.`,
-        html: htmlContent
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (brevoApiKey) {
+    try {
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || 'no-reply@rapidresq.in';
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': brevoApiKey
+        },
+        body: JSON.stringify({
+          sender: { name: 'RapidResQ Security', email: senderEmail },
+          to: [{ email }],
+          subject,
+          htmlContent,
+          textContent
+        }),
+        signal: AbortSignal.timeout(10000)
       });
 
-      return { deliveredVia: 'smtp', success: true };
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[MAILER BREVO ERROR]', response.status, errText);
+        throw new Error(`Brevo API Error: ${response.status}`);
+      }
+
+      return { deliveredVia: 'brevo-https', success: true };
     } catch (err) {
-      console.error('[SMTP SEND ERROR]', err.message);
+      console.error('[MAILER BREVO EXCEPTION]', err.message);
       if (requireRealOtp) {
-        throw new Error('Failed to deliver OTP email. Verify SMTP credentials.');
+        throw new Error('Failed to deliver OTP via Brevo API.');
       }
     }
-  } else if (requireRealOtp) {
-    throw new Error('Failed to deliver OTP email. Verify SMTP credentials.');
+  } else {
+    const transporter = getTransporter();
+    const from = process.env.SMTP_FROM || 'RapidResQ <no-reply@rapidresq.in>';
+
+    if (transporter) {
+      try {
+        await transporter.sendMail({
+          from,
+          to: email,
+          subject,
+          text: textContent,
+          html: htmlContent
+        });
+        return { deliveredVia: 'smtp', success: true };
+      } catch (err) {
+        console.error('[SMTP SEND ERROR]', err.message);
+        if (requireRealOtp) {
+          throw new Error('Failed to deliver OTP email. Verify SMTP credentials.');
+        }
+      }
+    } else if (requireRealOtp) {
+      throw new Error('Failed to deliver OTP email. No Brevo API key or SMTP config provided.');
+    }
   }
 
   // Fallback to simulated delivery if real OTP is not strictly required
