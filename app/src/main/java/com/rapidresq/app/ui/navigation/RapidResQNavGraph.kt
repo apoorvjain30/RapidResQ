@@ -1,5 +1,6 @@
 package com.rapidresq.app.ui.navigation
 
+import android.util.Log
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -73,6 +74,23 @@ fun RapidResQNavGraph() {
         }
     }
 
+    val currentRoute = navController.currentBackStackEntry?.destination?.route
+    val authRoutes = setOf("login", "register_citizen", "otp_verify", "forgot_password")
+
+    LaunchedEffect(currentSession, currentRoute) {
+        val session = currentSession
+        if (session != null && currentRoute in authRoutes) {
+            val dest = when (session.role) {
+                UserRole.CITIZEN -> "citizen_home"
+                UserRole.DISPATCHER -> "dispatcher_dashboard"
+                UserRole.RESPONDER -> "responder_dashboard"
+                UserRole.ADMIN -> "admin_dashboard"
+            }
+            Log.d("RRQ_TRACE", "Session active on $currentRoute -> routing to $dest")
+            navigateAndClearAuthStack(navController, dest)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
@@ -88,22 +106,28 @@ fun RapidResQNavGraph() {
             ) {
                 composable("splash") {
                     SplashScreen(
+                        isSessionInitialized = isSessionInitialized,
                         onSplashComplete = {
-                            if (isSessionInitialized) {
-                                if (currentSession != null) {
-                                    val dest = when (currentSession?.role) {
-                                        UserRole.CITIZEN -> "citizen_home"
-                                        UserRole.DISPATCHER -> "dispatcher_dashboard"
-                                        UserRole.RESPONDER -> "responder_dashboard"
-                                        UserRole.ADMIN -> "admin_dashboard"
-                                        else -> "login"
-                                    }
-                                    navigateAndClearAuthStack(navController, dest)
-                                } else if (hasPendingOtpChallenge) {
-                                    navigateAndClearAuthStack(navController, "otp_verify")
-                                } else {
-                                    navigateAndClearAuthStack(navController, "onboarding")
+                            val session = viewModel.currentSession.value
+                            val hasOtp = viewModel.hasPendingOtpChallenge.value
+                            
+                            Log.d("RRQ_TRACE", "Splash complete. session=${session != null}, hasOtp=$hasOtp")
+                            
+                            if (session != null) {
+                                val dest = when (session.role) {
+                                    UserRole.CITIZEN -> "citizen_home"
+                                    UserRole.DISPATCHER -> "dispatcher_dashboard"
+                                    UserRole.RESPONDER -> "responder_dashboard"
+                                    UserRole.ADMIN -> "admin_dashboard"
                                 }
+                                Log.d("RRQ_TRACE", "Splash -> navigating to $dest")
+                                navigateAndClearAuthStack(navController, dest)
+                            } else if (hasOtp) {
+                                Log.d("RRQ_TRACE", "Splash -> navigating to otp_verify")
+                                navigateAndClearAuthStack(navController, "otp_verify")
+                            } else {
+                                Log.d("RRQ_TRACE", "Splash -> navigating to onboarding")
+                                navigateAndClearAuthStack(navController, "onboarding")
                             }
                         }
                     )
@@ -130,14 +154,8 @@ fun RapidResQNavGraph() {
                                 launchSingleTop = true
                             }
                         },
-                        onLoginSuccess = { role -> 
-                            val dest = when (role) {
-                                UserRole.CITIZEN -> "citizen_home"
-                                UserRole.DISPATCHER -> "dispatcher_dashboard"
-                                UserRole.RESPONDER -> "responder_dashboard"
-                                UserRole.ADMIN -> "admin_dashboard"
-                            }
-                            navigateAndClearAuthStack(navController, dest)
+                        onLoginSuccess = { 
+                            // Handled by Reactive Router
                         },
                         onNavigateToRegister = { navController.navigate("register_citizen") },
                         onNavigateToForgotPass = { navController.navigate("forgot_password") }
@@ -157,19 +175,13 @@ fun RapidResQNavGraph() {
                 composable("otp_verify") {
                     OtpVerificationScreen(
                         viewModel = viewModel,
-                        roleName = currentSession?.role?.name ?: UserRole.CITIZEN.name,
-                        email = currentSession?.email ?: "",
+                        roleName = viewModel.currentSession.value?.role?.name ?: UserRole.CITIZEN.name,
+                        email = viewModel.currentSession.value?.email ?: "",
                         onVerified = {
-                            val role = viewModel.currentSession.value?.role ?: UserRole.CITIZEN
-                            val destination = when (role) {
-                                UserRole.CITIZEN -> "citizen_home"
-                                UserRole.DISPATCHER -> "dispatcher_dashboard"
-                                UserRole.RESPONDER -> "responder_dashboard"
-                                UserRole.ADMIN -> "admin_dashboard"
-                            }
-                            navigateAndClearAuthStack(navController, destination)
+                            // Handled by Reactive Router
                         },
                         onBack = { 
+                            Log.d("RRQ_TRACE", "OTP Cancelled -> popping backstack")
                             viewModel.clearPendingOtp()
                             navController.popBackStack() 
                         }

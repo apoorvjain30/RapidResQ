@@ -46,12 +46,7 @@ fun OtpVerificationScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var timeLeft by remember { mutableStateOf(300) }
 
-    LaunchedEffect(challenge) {
-        if (challenge == null && errorMessage == null) {
-            viewModel.clearPendingOtp()
-            onBack()
-        }
-    }
+    // Remove any LaunchedEffect that auto-pops the screen if challenge == null
 
     LaunchedEffect(timeLeft) {
         if (timeLeft > 0) {

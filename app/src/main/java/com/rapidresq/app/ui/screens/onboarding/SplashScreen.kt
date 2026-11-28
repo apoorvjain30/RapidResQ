@@ -21,10 +21,12 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(
+    isSessionInitialized: Boolean,
     onSplashComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isVisible by remember { mutableStateOf(false) }
+    var hasNavigated by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0.8f,
@@ -40,8 +42,21 @@ fun SplashScreen(
 
     LaunchedEffect(Unit) {
         isVisible = true
-        delay(1300)
-        onSplashComplete()
+        delay(2500)
+        if (!hasNavigated) {
+            hasNavigated = true
+            onSplashComplete()
+        }
+    }
+
+    LaunchedEffect(isSessionInitialized) {
+        if (isSessionInitialized) {
+            delay(900)
+            if (!hasNavigated) {
+                hasNavigated = true
+                onSplashComplete()
+            }
+        }
     }
 
     val backgroundBrush = Brush.radialGradient(
