@@ -45,24 +45,14 @@ fun CitizenTrackScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                title = { Text("Track Incident", fontWeight = FontWeight.Bold, color = BrandNavy) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            RapidResQCommandTopBar(
+                title = incident?.id ?: "Track Incident",
+                subtitle = "Live Emergency Tracking",
+                isCloudConnected = viewModel.isCloudConnected.collectAsState().value,
+                showBack = true,
+                onBack = onBack,
+                onAiClick = { showAiSheet = true }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAiSheet = true },
-                containerColor = BrandBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
-            }
         }
     ) { innerPadding ->
         if (incident == null) {

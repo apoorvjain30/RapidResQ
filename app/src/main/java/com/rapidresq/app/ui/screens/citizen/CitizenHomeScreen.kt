@@ -61,6 +61,7 @@ fun CitizenHomeScreen(
                 subtitle = subtitleText,
                 isCloudConnected = isCloudConnected,
                 showBack = true,
+                canGoBack = false,
                 onBack = onBackToRoles,
                 onAiClick = { showAiSheet = true },
                 onLogoutClick = { viewModel.logout(); onLogout() }

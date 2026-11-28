@@ -140,6 +140,34 @@ class KeystoreSessionManager(context: Context) {
     }
 
     fun clearSession() {
-        prefs.edit().clear().apply()
+        prefs.edit().remove("session_iv").remove("session_data").apply()
+    }
+    
+    fun savePendingOtp(email: String, purpose: String) {
+        prefs.edit()
+            .putString("pending_otp_email", email)
+            .putString("pending_otp_purpose", purpose)
+            .putLong("pending_otp_expires_at", System.currentTimeMillis() + 5 * 60_000)
+            .apply()
+    }
+    
+    fun getPendingOtp(): Pair<String, String>? {
+        val expiresAt = prefs.getLong("pending_otp_expires_at", 0)
+        if (System.currentTimeMillis() > expiresAt) {
+            clearPendingOtp()
+            return null
+        }
+        val email = prefs.getString("pending_otp_email", null)
+        val purpose = prefs.getString("pending_otp_purpose", null)
+        if (email != null && purpose != null) return Pair(email, purpose)
+        return null
+    }
+    
+    fun clearPendingOtp() {
+        prefs.edit()
+            .remove("pending_otp_email")
+            .remove("pending_otp_purpose")
+            .remove("pending_otp_expires_at")
+            .apply()
     }
 }

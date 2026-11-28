@@ -46,6 +46,7 @@ fun LoginScreen(
     var showDemoAccounts by remember { mutableStateOf(false) }
 
     val isActionInProgress by viewModel.isActionInProgress.collectAsState()
+    val globalLoadingMessage by viewModel.globalLoadingMessage.collectAsState()
 
     fun attemptLogin() {
         if (email.isBlank() || password.isBlank()) {
@@ -187,7 +188,7 @@ fun LoginScreen(
                     Button(
                         onClick = { attemptLogin() },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
-                        enabled = !isActionInProgress,
+                        enabled = !isActionInProgress && globalLoadingMessage == null,
                         colors = ButtonDefaults.buttonColors(containerColor = BrandBlue),
                         shape = RoundedCornerShape(14.dp)
                     ) {

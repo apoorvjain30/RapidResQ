@@ -17,13 +17,13 @@
                 android:endX="108"
                 android:endY="108">
                 <item android:offset="0" android:color="#172554"/>
-                <item android:offset="1" android:color="#0B132B"/>
+                <item android:offset="1" android:color="#090D16"/>
             </gradient>
         </aapt:attr>
     </path>
     <!-- Subtle grid overlay -->
     <path
         android:pathData="M0,27h108 M0,54h108 M0,81h108 M27,0v108 M54,0v108 M81,0v108"
-        android:strokeColor="#1E293B"
+        android:strokeColor="#111827"
         android:strokeWidth="0.5" />
 </vector>

@@ -146,61 +146,43 @@ router.post('/login', async (req, res) => {
     // Reset failed login attempts on successful password check
     await updateUserRecord(normalizedEmail, { failed_attempts: 0, locked_until: null });
 
-    // Staff roles (DISPATCHER, RESPONDER, ADMIN) require 2-Step OTP MFA
-    if (['DISPATCHER', 'RESPONDER', 'ADMIN'].includes(user.role)) {
-      const rawCode = String(crypto.randomInt(100000, 999999));
-      const hashedCode = await bcrypt.hash(rawCode, 10);
-      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+    // REQUIRE OTP FOR ALL ROLES (Admin, Dispatcher, Responder, AND Citizen)
+    const rawCode = String(crypto.randomInt(100000, 999999));
+    const hashedCode = await bcrypt.hash(rawCode, 10);
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
 
-      otpStore.set(`${normalizedEmail}:LOGIN_MFA`, {
-        hashedCode,
-        expiresAt,
-        remainingAttempts: 3
-      });
+    otpStore.set(`${normalizedEmail}:LOGIN_MFA`, {
+      hashedCode,
+      expiresAt,
+      remainingAttempts: 3
+    });
 
-      if (supabase) {
-        try {
-          await supabase.from('otp_challenges').insert([{
-            id: `OTP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
-            email: normalizedEmail,
-            purpose: 'LOGIN_MFA',
-            code_hash: hashedCode,
-            expires_at: new Date(expiresAt).toISOString(),
-            remaining_attempts: 3,
-            is_used: false,
-            created_at: new Date().toISOString()
-          }]);
-        } catch (otpErr) {
-          console.error('[OTP DB INSERT ERROR]', otpErr.message);
-        }
+    if (supabase) {
+      try {
+        await supabase.from('otp_challenges').insert([{
+          id: `OTP-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+          email: normalizedEmail,
+          purpose: 'LOGIN_MFA',
+          code_hash: hashedCode,
+          expires_at: new Date(expiresAt).toISOString(),
+          remaining_attempts: 3,
+          is_used: false,
+          created_at: new Date().toISOString()
+        }]);
+      } catch (otpErr) {
+        console.error('[OTP DB INSERT ERROR]', otpErr.message);
       }
-
-      const mailResult = await sendOtpEmail(normalizedEmail, rawCode, 'LOGIN_MFA');
-      await logAudit(user.role, 'OTP_ISSUED', 'SYSTEM', `Login MFA OTP issued for ${normalizedEmail}`);
-
-      return res.json({
-        requiresOtp: true,
-        email: normalizedEmail,
-        role: user.role,
-        purpose: 'LOGIN_MFA',
-        delivery: mailResult
-      });
     }
 
-    // Citizens sign in directly
-    const token = generateJwt(user);
-    await logAudit(user.role, 'LOGIN_SUCCESS', 'SYSTEM', `Citizen ${normalizedEmail} signed in`);
+    const mailResult = await sendOtpEmail(normalizedEmail, rawCode, 'LOGIN_MFA');
+    await logAudit(user.role, 'OTP_ISSUED', 'SYSTEM', `Login MFA OTP issued for ${normalizedEmail}`);
 
     return res.json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        assigned_team_id: user.assigned_team_id,
-        isGuest: false
-      }
+      requiresOtp: true,
+      email: normalizedEmail,
+      role: user.role,
+      purpose: 'LOGIN_MFA',
+      delivery: mailResult
     });
   } catch (err) {
     console.error('[AUTH LOGIN ERROR]', err);

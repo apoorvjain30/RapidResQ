@@ -75,29 +75,17 @@ fun DispatcherDashboardScreen(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Dispatcher Command - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
-                navigationIcon = {
-                    IconButton(onClick = onBackToRoles) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.logout(); onLogout() }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            RapidResQCommandTopBar(
+                title = "Dispatcher Command",
+                subtitle = session?.name ?: "",
+                isCloudConnected = isCloudConnected,
+                pendingOfflineCount = pendingCount,
+                showBack = true,
+                canGoBack = false,
+                onBack = onBackToRoles,
+                onAiClick = { showAiSheet = true },
+                onLogoutClick = { viewModel.logout(); onLogout() }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAiSheet = true },
-                containerColor = BrandBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
-            }
         }
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding).background(LightBackground)) {

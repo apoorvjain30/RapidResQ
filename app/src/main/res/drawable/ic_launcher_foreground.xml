@@ -12,22 +12,24 @@
 
     <!-- Main Crimson Shield (Scaled within 66dp safe zone) -->
     <path
-        android:fillColor="#DC2626"
+        android:fillColor="#EF4444"
         android:pathData="M54,20 L28,29 v22 c0,18.4 11.2,35.6 26,40.4 c14.8,-4.8 26,-22 26,-40.4 v-22 Z"
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="2"/>
+        android:strokeWidth="1.5"/>
 
-    <!-- White Inner Cross Base -->
+    <!-- Obsidian Inner Core -->
+    <path
+        android:fillColor="#090D16"
+        android:pathData="M54,23 L32,30 v20 c0,15 9,29 22,33 c13,-4 22,-18 22,-33 v-20 Z"/>
+
+    <!-- White Lightning Bolt & Beacon -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M49,36 h10 v8 h8 v10 h-8 v8 h-10 v-8 h-8 v-10 h8 z"/>
+        android:pathData="M57,32 l-12,14 h7 l-4,13 l13,-15 h-8 z"/>
 
-    <!-- Navy Pulse Cutout in the Cross -->
     <path
-        android:fillColor="#00000000"
-        android:strokeColor="#1E293B"
-        android:strokeWidth="2.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M43,49 l4,0 l3,-5 l4,10 l3,-5 l4,0"/>
+        android:pathData="M40,38 c-2,3 -2,7 0,10 M68,38 c2,3 2,7 0,10"/>
 </vector>

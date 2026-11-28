@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun OtpVerificationScreen(
     viewModel: RapidResQViewModel,
+    roleName: String,
+    email: String,
     onBack: () -> Unit,
     onVerified: () -> Unit,
     modifier: Modifier = Modifier
@@ -44,7 +46,8 @@ fun OtpVerificationScreen(
     var timeLeft by remember { mutableStateOf(300) }
 
     LaunchedEffect(challenge) {
-        if (challenge == null) {
+        if (challenge == null && errorMessage == null) {
+            viewModel.clearPendingOtp()
             onBack()
         }
     }
@@ -85,10 +88,10 @@ fun OtpVerificationScreen(
             .background(CanvasBg)
     ) {
         TopAppBar(
-            title = { Text("Verify Identity", fontWeight = FontWeight.Bold, color = BrandNavy) },
+            title = { Text("Verify Identity", fontWeight = FontWeight.Bold, color = TextPrimary) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = SurfaceCard)
@@ -122,7 +125,7 @@ fun OtpVerificationScreen(
                 if (parts.size == 2 && parts[0].length > 2) {
                     "${parts[0].take(2)}***@${parts[1]}"
                 } else e
-            } ?: "your email"
+            } ?: email
 
             Text(
                 text = "We sent a 6-digit code to $emailMasked",
@@ -157,12 +160,12 @@ fun OtpVerificationScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .aspectRatio(1f) // Roughly square, scales nicely
+                                    .aspectRatio(1f)
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(SurfaceCard)
+                                    .background(InputSurface)
                                     .border(
                                         width = if (isFocused) 2.dp else 1.dp,
-                                        color = if (isFocused) BrandBlue else CardBorder,
+                                        color = if (isFocused) BrandBlue else InputBorder,
                                         shape = RoundedCornerShape(14.dp)
                                     ),
                                 contentAlignment = Alignment.Center
@@ -202,17 +205,21 @@ fun OtpVerificationScreen(
                 }
             }
 
-            // Developer OTP Hint (Shown only if backend triggers it)
+            // Notice Pill
             if (simulatedNotice != null) {
                 Spacer(modifier = Modifier.height(32.dp))
+                val isRealDelivery = simulatedNotice!!.contains("sent to")
+                val bgColor = if (isRealDelivery) EmeraldSoft else AiIndigoSoft
+                val fgColor = if (isRealDelivery) EmeraldGreen else AiIndigo
+
                 Surface(
-                    color = AiIndigoSoft,
+                    color = bgColor,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = simulatedNotice!!.replace("Simulated OTP Delivery (Backend): ", "OTP Delivery Preview: "),
+                        text = simulatedNotice!!,
                         modifier = Modifier.padding(16.dp),
-                        color = AiIndigo,
+                        color = fgColor,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center

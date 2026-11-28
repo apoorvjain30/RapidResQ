@@ -24,6 +24,8 @@ import com.rapidresq.app.data.model.StaffAccount
 import com.rapidresq.app.data.model.UserRole
 import com.rapidresq.app.ui.components.AiAssistantSheet
 import com.rapidresq.app.ui.components.DemoModeBanner
+import com.rapidresq.app.ui.components.RapidResQCommandTopBar
+import com.rapidresq.app.ui.components.rapidResQTextFieldColors
 import com.rapidresq.app.ui.screens.dispatcher.AuditLogCard
 import com.rapidresq.app.ui.screens.dispatcher.DispatcherIncidentCard
 import com.rapidresq.app.ui.screens.dispatcher.KpiCard
@@ -75,29 +77,17 @@ fun AdminDashboardScreen(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text("Admin Governance - ${session?.name ?: ""}", fontWeight = FontWeight.Bold, color = BrandNavy) },
-                navigationIcon = {
-                    IconButton(onClick = onBackToRoles) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.logout(); onLogout() }) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout", tint = BrandNavy)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
+            RapidResQCommandTopBar(
+                title = "Admin Governance",
+                subtitle = session?.name ?: "",
+                isCloudConnected = isCloudConnected,
+                pendingOfflineCount = pendingCount,
+                showBack = true,
+                canGoBack = false,
+                onBack = onBackToRoles,
+                onAiClick = { showAiSheet = true },
+                onLogoutClick = { viewModel.logout(); onLogout() }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAiSheet = true },
-                containerColor = BrandBlue,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = "AI Assist")
-            }
         }
     ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding).background(LightBackground)) {
@@ -526,7 +516,8 @@ fun AdminDashboardScreen(
                             onValueChange = { sName = it },
                             label = { Text("Name") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = rapidResQTextFieldColors()
                         )
                     }
                     item {
@@ -535,7 +526,8 @@ fun AdminDashboardScreen(
                             onValueChange = { sEmail = it },
                             label = { Text("Email") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = rapidResQTextFieldColors()
                         )
                     }
                     item {
@@ -544,14 +536,19 @@ fun AdminDashboardScreen(
                             onValueChange = { sPass = it },
                             label = { Text("Password (8+ chars, upper, lower, digit)") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = rapidResQTextFieldColors()
                         )
                     }
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            AssistChip(onClick = { sRole = "DISPATCHER" }, label = { Text("Dispatcher") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "DISPATCHER") BrandBlueLight else Color.Transparent))
-                            AssistChip(onClick = { sRole = "RESPONDER" }, label = { Text("Responder") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "RESPONDER") BrandBlueLight else Color.Transparent))
-                            AssistChip(onClick = { sRole = "ADMIN" }, label = { Text("Admin") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "ADMIN") BrandBlueLight else Color.Transparent))
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AssistChip(onClick = { sRole = "DISPATCHER"; sDept = "Command Center" }, label = { Text("Dispatcher") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "DISPATCHER") BrandBlueLight else Color.Transparent))
+                            AssistChip(onClick = { sRole = "RESPONDER"; sDept = "" }, label = { Text("Responder") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "RESPONDER") BrandBlueLight else Color.Transparent))
+                            AssistChip(onClick = { sRole = "ADMIN"; sDept = "Governance" }, label = { Text("Admin") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "ADMIN") BrandBlueLight else Color.Transparent))
                         }
                     }
                     item {
@@ -560,7 +557,8 @@ fun AdminDashboardScreen(
                             onValueChange = { sDept = it },
                             label = { Text("Department") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = rapidResQTextFieldColors()
                         )
                     }
                     if (sRole == "RESPONDER") {
@@ -572,7 +570,7 @@ fun AdminDashboardScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(selected = sTeamId == t.id, onClick = { sTeamId = t.id })
-                                    Text(t.name)
+                                    Text(t.name, color = TextPrimary)
                                 }
                             }
                         }
@@ -608,11 +606,13 @@ fun AdminDashboardScreen(
             text = {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             AssistChip(onClick = { sRole = "CITIZEN" }, label = { Text("Citizen") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "CITIZEN") BrandBlueLight else Color.Transparent))
                             AssistChip(onClick = { sRole = "DISPATCHER" }, label = { Text("Dispatcher") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "DISPATCHER") BrandBlueLight else Color.Transparent))
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             AssistChip(onClick = { sRole = "RESPONDER" }, label = { Text("Responder") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "RESPONDER") BrandBlueLight else Color.Transparent))
                             AssistChip(onClick = { sRole = "ADMIN" }, label = { Text("Admin") }, colors = AssistChipDefaults.assistChipColors(containerColor = if (sRole == "ADMIN") BrandBlueLight else Color.Transparent))
                         }
@@ -623,7 +623,8 @@ fun AdminDashboardScreen(
                             onValueChange = { sDept = it },
                             label = { Text("Department") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = rapidResQTextFieldColors()
                         )
                     }
                     if (sRole == "RESPONDER") {
@@ -635,7 +636,7 @@ fun AdminDashboardScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(selected = sTeamId == t.id, onClick = { sTeamId = t.id })
-                                    Text(t.name)
+                                    Text(t.name, color = TextPrimary)
                                 }
                             }
                         }

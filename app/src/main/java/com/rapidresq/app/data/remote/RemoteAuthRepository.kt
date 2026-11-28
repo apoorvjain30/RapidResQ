@@ -31,6 +31,9 @@ class RemoteAuthRepository(
 
     private val _simulatedOtpNotice = MutableStateFlow<String?>(null)
     val simulatedOtpNotice: StateFlow<String?> = _simulatedOtpNotice.asStateFlow()
+    
+    private val _hasPendingOtpChallenge = MutableStateFlow(false)
+    val hasPendingOtpChallenge: StateFlow<Boolean> = _hasPendingOtpChallenge.asStateFlow()
 
     suspend fun loginWithPassword(email: String, pass: String): Result<Pair<UserSession?, UserRole>> = withContext(Dispatchers.IO) {
         try {
@@ -54,19 +57,24 @@ class RemoteAuthRepository(
 
                 if (jsonObj.optBoolean("requiresOtp", false)) {
                     val reqEmail = jsonObj.optString("email", email)
-                    val roleStr = jsonObj.optString("role", "DISPATCHER")
-                    val role = try { UserRole.valueOf(roleStr) } catch (e: Exception) { UserRole.DISPATCHER }
+                    val roleStr = jsonObj.optString("role", "CITIZEN")
+                    val role = try { UserRole.valueOf(roleStr) } catch (e: Exception) { UserRole.CITIZEN }
                     val purpose = jsonObj.optString("purpose", "LOGIN_MFA")
                     
                     val delivery = jsonObj.optJSONObject("delivery")
+                    val deliveredVia = delivery?.optString("deliveredVia", "") ?: ""
                     val hint = delivery?.optString("devOtpHint", "") ?: ""
-                    if (hint.isNotBlank()) {
-                        _simulatedOtpNotice.value = "Simulated OTP Delivery (Backend): Your code is $hint"
+                    
+                    if (deliveredVia == "simulated" && hint.isNotBlank()) {
+                        _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
+                    } else if (deliveredVia == "smtp") {
+                        _simulatedOtpNotice.value = "6-digit verification code sent to $reqEmail. Check Inbox or Spam."
                     } else {
                         _simulatedOtpNotice.value = null
                     }
 
                     _activeOtpChallenge.value = RemoteOtpChallenge(reqEmail, purpose, role)
+                    _hasPendingOtpChallenge.value = true
                     return@withContext Result.success(Pair(null, role))
                 } else {
                     val token = jsonObj.optString("token")
@@ -119,6 +127,7 @@ class RemoteAuthRepository(
                 val userRole = UserRole.valueOf(userObj.getString("role"))
 
                 _activeOtpChallenge.value = null
+                _hasPendingOtpChallenge.value = false
                 _simulatedOtpNotice.value = null
 
                 val session = UserSession(
@@ -159,9 +168,13 @@ class RemoteAuthRepository(
                 }
 
                 val delivery = jsonObj.optJSONObject("delivery")
+                val deliveredVia = delivery?.optString("deliveredVia", "") ?: ""
                 val hint = delivery?.optString("devOtpHint", "") ?: ""
-                if (hint.isNotBlank()) {
-                    _simulatedOtpNotice.value = "Simulated OTP Delivery (Backend): Your code is $hint"
+                
+                if (deliveredVia == "simulated" && hint.isNotBlank()) {
+                    _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
+                } else if (deliveredVia == "smtp") {
+                    _simulatedOtpNotice.value = "6-digit verification code sent to ${challenge.email}. Check Inbox or Spam."
                 }
                 Result.success(Unit)
             }
@@ -196,12 +209,17 @@ class RemoteAuthRepository(
                 val purpose = jsonObj.optString("purpose", "CITIZEN_REGISTER")
 
                 val delivery = jsonObj.optJSONObject("delivery")
+                val deliveredVia = delivery?.optString("deliveredVia", "") ?: ""
                 val hint = delivery?.optString("devOtpHint", "") ?: ""
-                if (hint.isNotBlank()) {
-                    _simulatedOtpNotice.value = "Simulated OTP Delivery (Backend): Your code is $hint"
+                
+                if (deliveredVia == "simulated" && hint.isNotBlank()) {
+                    _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
+                } else if (deliveredVia == "smtp") {
+                    _simulatedOtpNotice.value = "6-digit verification code sent to $reqEmail. Check Inbox or Spam."
                 }
 
                 _activeOtpChallenge.value = RemoteOtpChallenge(reqEmail, purpose, UserRole.CITIZEN)
+                _hasPendingOtpChallenge.value = true
                 Result.success(Unit)
             }
         } catch (e: Exception) {
@@ -227,9 +245,13 @@ class RemoteAuthRepository(
                 }
 
                 val delivery = jsonObj.optJSONObject("delivery")
+                val deliveredVia = delivery?.optString("deliveredVia", "") ?: ""
                 val hint = delivery?.optString("devOtpHint", "") ?: ""
-                if (hint.isNotBlank()) {
-                    _simulatedOtpNotice.value = "Simulated OTP Delivery (Backend): Your code is $hint"
+                
+                if (deliveredVia == "simulated" && hint.isNotBlank()) {
+                    _simulatedOtpNotice.value = "OTP Delivery Preview: $hint"
+                } else if (deliveredVia == "smtp") {
+                    _simulatedOtpNotice.value = "6-digit verification code sent to $email. Check Inbox or Spam."
                 }
                 Result.success(Unit)
             }
@@ -286,6 +308,7 @@ class RemoteAuthRepository(
                 }
 
                 _simulatedOtpNotice.value = null
+                _hasPendingOtpChallenge.value = false
                 Result.success(Unit)
             }
         } catch (e: Exception) {
@@ -308,5 +331,10 @@ class RemoteAuthRepository(
         } catch (e: Exception) {
             Result.success(Unit)
         }
+    }
+    fun clearPendingOtp() {
+        _activeOtpChallenge.value = null
+        _hasPendingOtpChallenge.value = false
+        _simulatedOtpNotice.value = null
     }
 }

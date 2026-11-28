@@ -1,5 +1,10 @@
 package com.rapidresq.app.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -11,12 +16,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.rapidresq.app.data.model.UserRole
+import com.rapidresq.app.ui.components.RapidResQLoadingOverlay
 import com.rapidresq.app.ui.screens.citizen.CitizenHomeScreen
 import com.rapidresq.app.ui.screens.citizen.CitizenTrackScreen
 import com.rapidresq.app.ui.screens.citizen.ReportEmergencyScreen
@@ -32,6 +39,13 @@ import com.rapidresq.app.ui.screens.auth.OtpVerificationScreen
 import com.rapidresq.app.ui.screens.auth.ForgotPasswordScreen
 import com.rapidresq.app.viewmodel.RapidResQViewModel
 
+fun navigateAndClearAuthStack(navController: NavHostController, targetRoute: String) {
+    navController.navigate(targetRoute) {
+        popUpTo(navController.graph.id) { inclusive = true }
+        launchSingleTop = true
+    }
+}
+
 @Composable
 fun RapidResQNavGraph() {
     val navController = rememberNavController()
@@ -41,6 +55,9 @@ fun RapidResQNavGraph() {
     val statusBanner by viewModel.statusBanner.collectAsState()
     val actionFeedback by viewModel.actionFeedback.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
+    val isSessionInitialized by viewModel.isSessionInitialized.collectAsState()
+    val hasPendingOtpChallenge by viewModel.hasPendingOtpChallenge.collectAsState()
+    val globalLoadingMessage by viewModel.globalLoadingMessage.collectAsState()
 
     LaunchedEffect(statusBanner) {
         statusBanner?.let {
@@ -59,186 +76,188 @@ fun RapidResQNavGraph() {
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = "splash",
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable("splash") {
-                SplashScreen(
-                    onSplashComplete = {
-                        if (currentSession != null && currentSession?.isGuest == false) {
-                            val dest = when (currentSession?.role) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            NavHost(
+                navController = navController,
+                startDestination = "splash",
+                modifier = Modifier.padding(innerPadding),
+                enterTransition = { fadeIn(tween(200)) },
+                exitTransition = { fadeOut(tween(160)) },
+                popEnterTransition = { fadeIn(tween(200)) },
+                popExitTransition = { fadeOut(tween(160)) }
+            ) {
+                composable("splash") {
+                    SplashScreen(
+                        onSplashComplete = {
+                            if (isSessionInitialized) {
+                                if (currentSession != null) {
+                                    val dest = when (currentSession?.role) {
+                                        UserRole.CITIZEN -> "citizen_home"
+                                        UserRole.DISPATCHER -> "dispatcher_dashboard"
+                                        UserRole.RESPONDER -> "responder_dashboard"
+                                        UserRole.ADMIN -> "admin_dashboard"
+                                        else -> "login"
+                                    }
+                                    navigateAndClearAuthStack(navController, dest)
+                                } else if (hasPendingOtpChallenge) {
+                                    navigateAndClearAuthStack(navController, "otp_verify")
+                                } else {
+                                    navigateAndClearAuthStack(navController, "onboarding")
+                                }
+                            }
+                        }
+                    )
+                }
+                composable("onboarding") {
+                    OnboardingScreen(
+                        onFinishOnboarding = {
+                            navigateAndClearAuthStack(navController, "login")
+                        },
+                        onGuestSos = {
+                            viewModel.enterGuestSos()
+                            navigateAndClearAuthStack(navController, "citizen_home")
+                        }
+                    )
+                }
+                composable("login") {
+                    LoginScreen(
+                        viewModel = viewModel,
+                        onGuestSos = {
+                            navigateAndClearAuthStack(navController, "citizen_home")
+                        },
+                        onRequireOtp = {
+                            navController.navigate("otp_verify") {
+                                launchSingleTop = true
+                            }
+                        },
+                        onLoginSuccess = { role -> 
+                            val dest = when (role) {
                                 UserRole.CITIZEN -> "citizen_home"
                                 UserRole.DISPATCHER -> "dispatcher_dashboard"
                                 UserRole.RESPONDER -> "responder_dashboard"
                                 UserRole.ADMIN -> "admin_dashboard"
-                                else -> "login"
                             }
-                            navController.navigate(dest) { popUpTo("splash") { inclusive = true } }
-                        } else {
-                            navController.navigate("onboarding") { popUpTo("splash") { inclusive = true } }
-                        }
-                    }
-                )
-            }
-            composable("onboarding") {
-                OnboardingScreen(
-                    onFinishOnboarding = {
-                        navController.navigate("login") {
-                            popUpTo("onboarding") { inclusive = true }
-                        }
-                    },
-                    onGuestSos = {
-                        viewModel.enterGuestSos()
-                        navController.navigate("citizen_home")
-                    }
-                )
-            }
-            composable("login") {
-                LoginScreen(
-                    viewModel = viewModel,
-                    onGuestSos = {
-                        navController.navigate("citizen_home")
-                    },
-                    onRequireOtp = {
-                        navController.navigate("otp_verify")
-                    },
-                    onLoginSuccess = { role -> 
-                        when (role) {
-                            UserRole.CITIZEN -> navController.navigate("citizen_home") { popUpTo("login") { inclusive = true } }
-                            UserRole.DISPATCHER -> navController.navigate("dispatcher_dashboard") { popUpTo("login") { inclusive = true } }
-                            UserRole.RESPONDER -> navController.navigate("responder_dashboard") { popUpTo("login") { inclusive = true } }
-                            UserRole.ADMIN -> navController.navigate("admin_dashboard") { popUpTo("login") { inclusive = true } }
-                        }
-                    },
-                    onNavigateToRegister = { navController.navigate("register_citizen") },
-                    onNavigateToForgotPass = { navController.navigate("forgot_password") }
-                )
-            }
-            composable("register_citizen") {
-                RegisterCitizenScreen(
-                    viewModel = viewModel,
-                    onBack = { navController.popBackStack() },
-                    onRequireOtp = { 
-                        navController.navigate("otp_verify")
-                    }
-                )
-            }
-            composable("otp_verify") {
-                OtpVerificationScreen(
-                    viewModel = viewModel,
-                    onVerified = {
-                        val role = viewModel.currentSession.value?.role ?: UserRole.CITIZEN
-                        val destination = when (role) {
-                            UserRole.CITIZEN -> "citizen_home"
-                            UserRole.DISPATCHER -> "dispatcher_dashboard"
-                            UserRole.RESPONDER -> "responder_dashboard"
-                            UserRole.ADMIN -> "admin_dashboard"
-                        }
-                        navController.navigate(destination) {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    },
-                    onBack = { navController.popBackStack() }
-                )
-            }
-            composable("forgot_password") {
-                ForgotPasswordScreen(
-                    viewModel = viewModel,
-                    onBack = { navController.popBackStack() },
-                    onResetComplete = { 
-                        navController.navigate("login") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    }
-                )
-            }
-            composable("role_entry") {
-                RoleEntryScreen(
-                    onSelectRole = { role ->
-                        when (role) {
-                            UserRole.CITIZEN -> navController.navigate("citizen_home")
-                            UserRole.DISPATCHER -> navController.navigate("dispatcher_dashboard")
-                            UserRole.RESPONDER -> navController.navigate("responder_dashboard")
-                            UserRole.ADMIN -> navController.navigate("admin_dashboard")
-                        }
-                    }
-                )
-            }
-            composable("citizen_home") {
-                CitizenHomeScreen(
-                    viewModel = viewModel,
-                    onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
-                    onReportClick = { navController.navigate("citizen_report") },
-                    onTrackIncident = { incidentId -> navController.navigate("citizen_track/$incidentId") },
-                    onLogout = { navController.navigate("login") { popUpTo(0) } }
-                )
-            }
-            composable("citizen_report") {
-                ReportEmergencyScreen(
-                    viewModel = viewModel,
-                    onBack = { navController.popBackStack() },
-                    onReportSubmitted = { incidentId ->
-                        navController.navigate("citizen_track/$incidentId") {
-                            popUpTo("citizen_report") { inclusive = true }
-                        }
-                    }
-                )
-            }
-            composable(
-                route = "citizen_track/{incidentId}",
-                arguments = listOf(navArgument("incidentId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val incidentId = backStackEntry.arguments?.getString("incidentId") ?: ""
-                CitizenTrackScreen(
-                    incidentId = incidentId,
-                    viewModel = viewModel,
-                    onBack = { navController.popBackStack() }
-                )
-            }
-            composable("dispatcher_dashboard") {
-                LaunchedEffect(currentSession) {
-                    if (currentSession?.role != UserRole.DISPATCHER) {
-                        navController.navigate("login") { popUpTo(0) }
-                    }
-                }
-                if (currentSession?.role == UserRole.DISPATCHER) {
-                    DispatcherDashboardScreen(
-                        viewModel = viewModel,
-                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
-                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                            navigateAndClearAuthStack(navController, dest)
+                        },
+                        onNavigateToRegister = { navController.navigate("register_citizen") },
+                        onNavigateToForgotPass = { navController.navigate("forgot_password") }
                     )
                 }
-            }
-            composable("responder_dashboard") {
-                LaunchedEffect(currentSession) {
-                    if (currentSession?.role != UserRole.RESPONDER) {
-                        navController.navigate("login") { popUpTo(0) }
-                    }
-                }
-                if (currentSession?.role == UserRole.RESPONDER) {
-                    ResponderDashboardScreen(
+                composable("register_citizen") {
+                    RegisterCitizenScreen(
                         viewModel = viewModel,
-                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
-                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                        onBack = { navController.popBackStack() },
+                        onRequireOtp = { 
+                            navController.navigate("otp_verify") {
+                                launchSingleTop = true
+                            }
+                        }
                     )
                 }
-            }
-            composable("admin_dashboard") {
-                LaunchedEffect(currentSession) {
-                    if (currentSession?.role != UserRole.ADMIN) {
-                        navController.navigate("login") { popUpTo(0) }
-                    }
-                }
-                if (currentSession?.role == UserRole.ADMIN) {
-                    AdminDashboardScreen(
+                composable("otp_verify") {
+                    OtpVerificationScreen(
                         viewModel = viewModel,
-                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
-                        onLogout = { navController.navigate("login") { popUpTo(0) } }
+                        roleName = currentSession?.role?.name ?: UserRole.CITIZEN.name,
+                        email = currentSession?.email ?: "",
+                        onVerified = {
+                            val role = viewModel.currentSession.value?.role ?: UserRole.CITIZEN
+                            val destination = when (role) {
+                                UserRole.CITIZEN -> "citizen_home"
+                                UserRole.DISPATCHER -> "dispatcher_dashboard"
+                                UserRole.RESPONDER -> "responder_dashboard"
+                                UserRole.ADMIN -> "admin_dashboard"
+                            }
+                            navigateAndClearAuthStack(navController, destination)
+                        },
+                        onBack = { 
+                            viewModel.clearPendingOtp()
+                            navController.popBackStack() 
+                        }
                     )
                 }
+                composable("forgot_password") {
+                    ForgotPasswordScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                        onResetComplete = { 
+                            navigateAndClearAuthStack(navController, "login")
+                        }
+                    )
+                }
+                composable("role_entry") {
+                    RoleEntryScreen(
+                        onSelectRole = { role ->
+                            when (role) {
+                                UserRole.CITIZEN -> navigateAndClearAuthStack(navController, "citizen_home")
+                                UserRole.DISPATCHER -> navigateAndClearAuthStack(navController, "dispatcher_dashboard")
+                                UserRole.RESPONDER -> navigateAndClearAuthStack(navController, "responder_dashboard")
+                                UserRole.ADMIN -> navigateAndClearAuthStack(navController, "admin_dashboard")
+                            }
+                        }
+                    )
+                }
+                composable("citizen_home") {
+                    CitizenHomeScreen(
+                        viewModel = viewModel,
+                        onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                        onReportClick = { navController.navigate("citizen_report") },
+                        onTrackIncident = { incidentId -> navController.navigate("citizen_track/$incidentId") },
+                        onLogout = { navigateAndClearAuthStack(navController, "login") }
+                    )
+                }
+                composable("citizen_report") {
+                    ReportEmergencyScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                        onReportSubmitted = { incidentId ->
+                            navController.navigate("citizen_track/$incidentId") {
+                                popUpTo("citizen_report") { inclusive = true }
+                            }
+                        }
+                    )
+                }
+                composable(
+                    route = "citizen_track/{incidentId}",
+                    arguments = listOf(navArgument("incidentId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val incidentId = backStackEntry.arguments?.getString("incidentId") ?: ""
+                    CitizenTrackScreen(
+                        incidentId = incidentId,
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable("dispatcher_dashboard") {
+                    if (currentSession?.role == UserRole.DISPATCHER) {
+                        DispatcherDashboardScreen(
+                            viewModel = viewModel,
+                            onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                            onLogout = { navigateAndClearAuthStack(navController, "login") }
+                        )
+                    }
+                }
+                composable("responder_dashboard") {
+                    if (currentSession?.role == UserRole.RESPONDER) {
+                        ResponderDashboardScreen(
+                            viewModel = viewModel,
+                            onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                            onLogout = { navigateAndClearAuthStack(navController, "login") }
+                        )
+                    }
+                }
+                composable("admin_dashboard") {
+                    if (currentSession?.role == UserRole.ADMIN) {
+                        AdminDashboardScreen(
+                            viewModel = viewModel,
+                            onBackToRoles = { navController.popBackStack("role_entry", inclusive = false) },
+                            onLogout = { navigateAndClearAuthStack(navController, "login") }
+                        )
+                    }
+                }
             }
+
+            // Global Animated Loading Overlay
+            RapidResQLoadingOverlay(message = globalLoadingMessage)
         }
     }
 }

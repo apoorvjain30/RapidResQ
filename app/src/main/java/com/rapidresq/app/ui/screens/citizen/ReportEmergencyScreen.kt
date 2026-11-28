@@ -5,13 +5,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
@@ -36,6 +36,7 @@ import com.rapidresq.app.data.model.MediaAttachment
 import com.rapidresq.app.ui.components.CategoryIcon
 import com.rapidresq.app.ui.components.MapPin
 import com.rapidresq.app.ui.components.MapPinType
+import com.rapidresq.app.ui.components.RapidResQCommandTopBar
 import com.rapidresq.app.ui.components.RapidResQMapCard
 import com.rapidresq.app.ui.theme.*
 import com.rapidresq.app.viewmodel.RapidResQViewModel
@@ -88,30 +89,29 @@ fun ReportEmergencyScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(LightBackground)
-    ) {
-        TopAppBar(
-            title = { Text("Report Emergency", fontWeight = FontWeight.Bold, color = BrandNavy) },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = BrandNavy)
-                }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = LightSurface)
-        )
-
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = CanvasBg,
+        topBar = {
+            RapidResQCommandTopBar(
+                title = "Report Emergency",
+                subtitle = "New Incident Report",
+                isCloudConnected = viewModel.isCloudConnected.collectAsState().value,
+                showBack = true,
+                onBack = onBack
+            )
+        }
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Category Selection (2x2 Grid approximated)
             item {
-                Text("1. What is the emergency?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("1. What is the emergency?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
                 val categories = EmergencyCategory.entries
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -148,7 +148,7 @@ fun ReportEmergencyScreen(
 
             // Location
             item {
-                Text("2. Where is it?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("2. Where is it?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = locationText,
@@ -157,12 +157,13 @@ fun ReportEmergencyScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BrandBlue,
-                        unfocusedBorderColor = SubtleBorder,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = BrandBlue,
+                        unfocusedLabelColor = TextMuted,
+                        focusedContainerColor = SurfaceCard,
+                        unfocusedContainerColor = SurfaceCard
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -192,8 +193,9 @@ fun ReportEmergencyScreen(
                             locationText = "Near Acropolis Campus, Manglia, Indore"
                             gpsLabel = "22.8235° N, 75.9432° E (Demo GPS)"
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = LightSurfaceVariant, contentColor = BrandBlue),
-                        modifier = Modifier.weight(1f)
+                        colors = ButtonDefaults.buttonColors(containerColor = SurfaceCard, contentColor = BrandBlue),
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, CardBorder)
                     ) {
                         Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -205,8 +207,8 @@ fun ReportEmergencyScreen(
                     Text(
                         text = "GPS: $gpsLabel",
                         style = MaterialTheme.typography.bodySmall,
-                        color = SafeEmerald,
-                        modifier = Modifier.padding(top = 4.dp)
+                        color = EmeraldGreen,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                 }
 
@@ -247,7 +249,7 @@ fun ReportEmergencyScreen(
 
             // Severity
             item {
-                Text("3. Severity level", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("3. Severity level", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -255,11 +257,12 @@ fun ReportEmergencyScreen(
                 ) {
                     IncidentSeverity.entries.forEach { severity ->
                         val isSelected = selectedSeverity == severity
-                        val bgColor = if (isSelected) BrandBlue else LightSurfaceVariant
-                        val textColor = if (isSelected) Color.White else SlateTextPrimary
+                        val bgColor = if (isSelected) BrandBlue else SurfaceCard
+                        val textColor = if (isSelected) Color.White else TextPrimary
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = bgColor,
+                            border = if (!isSelected) androidx.compose.foundation.BorderStroke(1.dp, CardBorder) else null,
                             modifier = Modifier
                                 .weight(1f)
                                 .clickable { selectedSeverity = severity }
@@ -279,7 +282,7 @@ fun ReportEmergencyScreen(
 
             // Details
             item {
-                Text("4. Details (Optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("4. Details (Optional)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = title,
@@ -289,12 +292,13 @@ fun ReportEmergencyScreen(
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BrandBlue,
-                        unfocusedBorderColor = SubtleBorder,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = BrandBlue,
+                        unfocusedLabelColor = TextMuted,
+                        focusedContainerColor = SurfaceCard,
+                        unfocusedContainerColor = SurfaceCard
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -306,12 +310,13 @@ fun ReportEmergencyScreen(
                     maxLines = 4,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BrandBlue,
-                        unfocusedBorderColor = SubtleBorder,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = BrandBlue,
+                        unfocusedLabelColor = TextMuted,
+                        focusedContainerColor = SurfaceCard,
+                        unfocusedContainerColor = SurfaceCard
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -323,19 +328,20 @@ fun ReportEmergencyScreen(
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = BrandBlue,
-                        unfocusedBorderColor = SubtleBorder,
-                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-                        focusedLabelColor = MaterialTheme.colorScheme.primary,
-                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        cursorColor = MaterialTheme.colorScheme.primary
+                        unfocusedBorderColor = CardBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedLabelColor = BrandBlue,
+                        unfocusedLabelColor = TextMuted,
+                        focusedContainerColor = SurfaceCard,
+                        unfocusedContainerColor = SurfaceCard
                     )
                 )
             }
 
             // Media
             item {
-                Text("5. Photo / Video", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("5. Photo / Video", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 if (attachedMedia == null) {
@@ -343,7 +349,8 @@ fun ReportEmergencyScreen(
                         onClick = {
                             photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         },
-                        colors = CardDefaults.cardColors(containerColor = LightSurfaceVariant),
+                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                        border = CardDefaults.outlinedCardBorder(true).copy(width = 1.dp, brush = SolidColor(CardBorder)),
                         modifier = Modifier.fillMaxWidth().height(120.dp)
                     ) {
                         Column(
@@ -351,9 +358,9 @@ fun ReportEmergencyScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = SlateTextSecondary, modifier = Modifier.size(32.dp))
+                            Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = TextMuted, modifier = Modifier.size(32.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Tap to attach media", color = SlateTextSecondary)
+                            Text("Tap to attach media", color = TextMuted)
                         }
                     }
                 } else {
@@ -369,7 +376,7 @@ fun ReportEmergencyScreen(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .size(48.dp)
-                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(24.dp)),
+                                    .background(color = Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(24.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White)
@@ -422,7 +429,7 @@ fun ReportEmergencyScreen(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = EmergencyRed,
-                        disabledContainerColor = LightSurfaceVariant
+                        disabledContainerColor = SurfaceCard
                     ),
                     enabled = selectedCategory != null && locationText.isNotBlank() && !isSubmitting
                 ) {
@@ -436,7 +443,7 @@ fun ReportEmergencyScreen(
                         Text("Submit Emergency Report", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     }
                 }
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(96.dp))
             }
         }
     }
@@ -449,8 +456,8 @@ private fun CategorySelectCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isSelected) BrandBlueLight else LightSurface
-    val borderColor = if (isSelected) BrandBlue else SubtleBorder
+    val bgColor = if (isSelected) BrandBlueLight else SurfaceCard
+    val borderColor = if (isSelected) BrandBlue else CardBorder
 
     Card(
         modifier = modifier
@@ -465,7 +472,7 @@ private fun CategorySelectCard(
         ) {
             CategoryIcon(
                 category = category,
-                tint = if (isSelected) BrandBlue else SlateTextSecondary,
+                tint = if (isSelected) BrandBlue else TextSecondary,
                 modifier = Modifier.size(32.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -473,7 +480,7 @@ private fun CategorySelectCard(
                 text = category.label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (isSelected) BrandBlue else SlateTextPrimary,
+                color = if (isSelected) BrandBlue else TextPrimary,
                 textAlign = TextAlign.Center
             )
         }

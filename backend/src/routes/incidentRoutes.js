@@ -298,42 +298,6 @@ export function createIncidentRoutes(io) {
       inMemoryTimeline.set(id, [{ timestamp: now, statusLabel: 'Reported', actor: 'Citizen' }]);
       inMemoryNotes.set(id, []);
 
-      // Auto-Dispatch Logic
-      let autoAssignedTeam = null;
-      if (getAutoDispatchEnabled() && supabase && !isNaN(parsedLat) && !isNaN(parsedLng)) {
-        try {
-          const recType = getRecommendedUnitType(category);
-          const { data: rpcTeams } = await supabase.rpc('rank_available_teams', {
-            p_lat: parsedLat,
-            p_lng: parsedLng,
-            p_recommended_type: recType
-          });
-
-          if (rpcTeams && rpcTeams.length > 0) {
-            autoAssignedTeam = rpcTeams[0]; // Pick closest available
-            const teamLocal = inMemoryTeams.get(autoAssignedTeam.id);
-            if (teamLocal && teamLocal.isAvailable) {
-              teamLocal.isAvailable = false;
-              newIncident.status = 'ASSIGNED';
-              newIncident.assignedTeamId = teamLocal.id;
-              newIncident.assignedTeamName = teamLocal.name;
-              newIncident.assignedAt = now;
-
-              inMemoryTimeline.get(id).push({
-                timestamp: now + 1,
-                statusLabel: `Auto-Assigned to ${teamLocal.name}`,
-                actor: 'Auto-Dispatch Engine'
-              });
-
-              await supabase.from('response_teams').update({ is_available: false }).eq('id', teamLocal.id);
-              await logAudit('System', 'AUTO_DISPATCHED', id, `Auto-assigned to ${teamLocal.name} (${autoAssignedTeam.distance_km || 0}km)`);
-            }
-          }
-        } catch (adErr) {
-          console.error('[AUTO DISPATCH ERROR]', adErr.message);
-        }
-      }
-
       if (supabase) {
         try {
           await supabase.from('incidents').insert([{
@@ -531,8 +495,64 @@ export function createIncidentRoutes(io) {
       }
 
       await logAudit(req.user.role, 'VERIFY', id, `Incident verified by ${req.user.email}`);
-      await broadcastUpdates(id);
 
+      // Auto-Dispatch Logic after Verification
+      if (getAutoDispatchEnabled() && supabase && inc.lat && inc.lng) {
+        try {
+          const recType = getRecommendedUnitType(inc.category);
+          const { data: rpcTeams } = await supabase.rpc('rank_available_teams', {
+            p_lat: inc.lat,
+            p_lng: inc.lng,
+            p_recommended_type: recType
+          });
+
+          if (rpcTeams && rpcTeams.length > 0) {
+            const autoAssignedTeam = rpcTeams[0]; // Pick closest available
+            const teamLocal = inMemoryTeams.get(autoAssignedTeam.id);
+
+            if (teamLocal && teamLocal.isAvailable) {
+              const dispatchNow = Date.now();
+              teamLocal.isAvailable = false;
+              inc.status = 'ASSIGNED';
+              inc.assignedTeamId = teamLocal.id;
+              inc.assignedTeamName = teamLocal.name;
+              inc.assignedAt = dispatchNow;
+
+              const tmln = inMemoryTimeline.get(id);
+              tmln.push({
+                timestamp: dispatchNow,
+                statusLabel: `Auto-Assigned to ${teamLocal.name}`,
+                actor: 'Auto-Dispatch Engine'
+              });
+              inMemoryTimeline.set(id, tmln);
+
+              await supabase.from('response_teams').update({ is_available: false }).eq('id', teamLocal.id);
+
+              await supabase.from('incidents').update({
+                status: 'ASSIGNED',
+                assigned_team_id: teamLocal.id,
+                assigned_team_name: teamLocal.name,
+                assigned_at: new Date(dispatchNow).toISOString()
+              }).eq('id', id);
+
+              await supabase.from('incident_timeline').insert([{
+                id: `TL-${dispatchNow}-${Math.floor(Math.random() * 1000)}`,
+                incident_id: id,
+                timestamp_label: formatIstTime(new Date(dispatchNow)),
+                status_label: `Auto-Assigned to ${teamLocal.name}`,
+                actor: 'Auto-Dispatch Engine',
+                note: null
+              }]);
+
+              await logAudit('System', 'AUTO_DISPATCHED', id, `Auto-assigned to ${teamLocal.name} (${autoAssignedTeam.distance_km || 0}km)`);
+            }
+          }
+        } catch (adErr) {
+          console.error('[AUTO DISPATCH ERROR]', adErr.message);
+        }
+      }
+
+      await broadcastUpdates(id);
       return res.json(hydrateIncident(inc));
     } catch (err) {
       res.status(500).json({ error: 'Server Error', message: err.message });
